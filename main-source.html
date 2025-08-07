@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Main Source – Import Data</title>
+  <style>
+    :root{
+      --bg:#0f1020; --card:#1b1d36; --text:#fff; --muted:rgba(255,255,255,.8);
+      --border:rgba(255,255,255,.12); --ok:#20c997; --warn:#ffc107; --err:#ff6b6b;
+    }
+    *{box-sizing:border-box}
+    body{margin:0; font-family:system-ui, Arial, sans-serif; color:var(--text); background:var(--bg);}
+    .wrap{width: clamp(960px, 92vw, 1400px); margin:0 auto; padding:20px;}
+    h1{margin:0 0 12px; font-size:20px}
+    p{color:var(--muted); margin:6px 0}
+    .grid{display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:12px}
+    .box{background:var(--card); border:1px solid var(--border); border-radius:12px; padding:14px}
+    label{font-weight:700; display:block; margin-bottom:6px}
+    select, button{font:inherit}
+    .row{display:flex; gap:8px; align-items:center; flex-wrap:wrap}
+    .btn{padding:8px 12px; border-radius:10px; border:1px solid var(--border); background:#0f1129; color:#fff; cursor:pointer}
+    .btn.ok{background:var(--ok); color:#0b2f24; border-color:transparent; font-weight:800}
+    .btn.warn{background:var(--warn); color:#2a2100; border-color:transparent; font-weight:800}
+    .btn.ghost{background:transparent}
+    .file-drop{
+      display:flex; align-items:center; justify-content:center; text-align:center;
+      padding:24px; border:2px dashed var(--border); border-radius:12px; color:var(--muted);
+    }
+    .file-drop.drag{border-color:#6ea8fe; color:#6ea8fe}
+    table{width:100%; border-collapse:separate; border-spacing:0; min-width:720px; margin-top:10px}
+    thead th{position:sticky; top:0; background:#121233; color:#fff; text-align:left; padding:8px 10px; border-bottom:1px solid var(--border)}
+    tbody td{padding:8px 10px; border-bottom:1px solid rgba(255,255,255,.08); color:#e9e9f3}
+    .muted{color:var(--muted)}
+    .stat{display:inline-block; padding:4px 8px; border-radius:8px; background:#0f1129; border:1px solid var(--border); margin-right:8px}
+    .bad{color:var(--err)}
+    .good{color:var(--ok)}
+    .note{font-size:13px; color:var(--muted)}
+    .footer{display:flex; gap:8px; margin-top:12px; justify-content:flex-end}
+    .mono{font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace}
+  </style>
+  <!-- Excel parser (xlsx) -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Main Source – Import from Excel/CSV</h1>
+    <p>Import master data here and save to your browser. Your dashboard can read it from <span class="mono">localStorage</span>.</p>
+
+    <div class="grid">
+      <div class="box">
+        <label for="dataset">1) Select Dataset</label>
+        <div class="row">
+          <select id="dataset">
+            <option value="employees">Employees (all roles)</option>
+            <option value="perfFOS">Monthly Performance (FOS)</option>
+            <option value="salesFOS">Sales (FOS)</option>
+            <option value="matrixFOS">Input Matrix (FOS)</option>
+          </select>
+          <button class="btn" id="btnTemplate">Download Template</button>
+        </div>
+        <div style="margin-top:10px" id="schema" class="note"></div>
+      </div>
+
+      <div class="box">
+        <label>2) Choose File (Excel .xlsx/.xls or .csv)</label>
+        <div class="file-drop" id="drop">
+          Drag & drop file here, or
+          <input type="file" id="file" accept=".xlsx,.xls,.csv" style="margin-left:8px" />
+        </div>
+        <p class="note">Tip: For Excel, first row must contain the headers exactly as shown in the template.</p>
+      </div>
+    </div>
+
+    <div class="box" style="margin-top:16px">
+      <div class="row" style="justify-content:space-between">
+        <div>
+          <span id="status" class="stat">No file loaded</span>
+          <span id="validate" class="stat">Headers: —</span>
+        </div>
+        <div>
+          <button class="btn ghost" id="btnExportJSON">Export Saved JSON</button>
+          <button class="btn ghost" id="btnClear">Clear Saved</button>
+          <button class="btn ok" id="btnSave" disabled>Save to Browser</button>
+        </div>
+      </div>
+      <div class="table-wrap" style="overflow:auto; max-height:60vh">
+        <table id="preview" style="display:none">
+          <thead></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="box" style="margin-top:12px">
+      <b>How it saves (keys in localStorage):</b>
+      <ul class="note">
+        <li><span class="mono">ms_employees</span> → <span class="mono">{ role: { name: {city,status,doj,dol,code,salary}, ... }, ... }</span></li>
+        <li><span class="mono">ms_perfFOS</span> → <span class="mono">{ name: { "YYYY-MM": {total,cancelled,marketing,infra,revenue}, ... }, ... }</span></li>
+        <li><span class="mono">ms_salesFOS</span> → <span class="mono">{ name: [ {date,project,client,unit,status,revenue}, ... ], ... }</span></li>
+        <li><span class="mono">ms_matrixFOS</span> → <span class="mono">{ name: { "YYYY-MM": {calls,connected,duration,svSched,svDone,mtgSched,mtgDone,dailyWork}, ... }, ... }</span></li>
+      </ul>
+    </div>
+  </div>
+
+  <script>
+    // === Required schemas & templates ===
+    const SCHEMAS = {
+      employees: {
+        label: 'Employees (all roles)',
+        headers: ['role','name','city','status','doj','dol','code','salary'],
+        example: [
+          ['FOS','A','Noida','Active','2024-02-10','','RA-FOS-001',30000],
+          ['Team Leader','D','Noida','Active','2022-03-05','','RA-TL-010',45000]
+        ]
+      },
+      perfFOS: {
+        label: 'Monthly Performance (FOS)',
+        headers: ['name','month','total','cancelled','marketing','infra','revenue'],
+        example: [
+          ['A','2024-02',3,1,5000,2000,90000],
+          ['A','2024-03',4,0,6000,1500,120000]
+        ]
+      },
+      salesFOS: {
+        label: 'Sales (FOS)',
+        headers: ['name','date','project','client','unit','status','revenue'],
+        example: [
+          ['A','2024-02-18','Gaur Airocity','Rohit Sharma','A-1203','Confirmed',4500000],
+          ['A','2024-03-05','Gaur Aero Mall','Neha Gupta','K-05','Not Confirmed',1200000]
+        ]
+      },
+      matrixFOS: {
+        label: 'Input Matrix (FOS)',
+        headers: ['name','month','calls','connected','duration','svSched','svDone','mtgSched','mtgDone','dailyWork'],
+        example: [
+          ['A','2024-02',420,180,950,14,9,8,5,22],
+          ['A','2024-03',510,230,1180,18,12,11,8,24]
+        ]
+      }
+    };
+
+    const datasetSel = document.getElementById('dataset');
+    const schemaDiv = document.getElementById('schema');
+    const fileInput = document.getElementById('file');
+    const drop = document.getElementById('drop');
+    const statusSpan = document.getElementById('status');
+    const valSpan = document.getElementById('validate');
+    const btnTemplate = document.getElementById('btnTemplate');
+    const btnSave = document.getElementById('btnSave');
+    const btnExportJSON = document.getElementById('btnExportJSON');
+    const btnClear = document.getElementById('btnClear');
+
+    const tbl = document.getElementById('preview');
+    const thead = tbl.querySelector('thead');
+    const tbody = tbl.querySelector('tbody');
+
+    let rows = [];      // Array of array (preview)
+    let headers = [];   // First row headers
+    let ready = false;  // Validated
+
+    function showSchema(){
+      const ds = datasetSel.value;
+      const s = SCHEMAS[ds];
+      schemaDiv.innerHTML = `
+        <div><b>${s.label}</b></div>
+        <div>Required headers: <span class="mono">${s.headers.join(', ')}</span></div>
+        <div>Example row: <span class="mono">${s.example[0].join(' | ')}</span></div>
+      `;
+    }
+    showSchema();
+    datasetSel.addEventListener('change', ()=>{ showSchema(); validateHeaders(); });
+
+    // Download CSV template
+    btnTemplate.addEventListener('click', ()=>{
+      const ds = datasetSel.value, sch = SCHEMAS[ds];
+      const lines = [sch.headers.join(',')]
+        .concat(sch.example.map(r=>r.map(v=>{
+          const s = String(v ?? '');
+          return /[",\n]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s;
+        }).join(',')));
+      const blob = new Blob([lines.join('\n')], {type:'text/csv;charset=utf-8;'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `${ds}_template.csv`; a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    // Drag & drop
+    ;['dragenter','dragover'].forEach(ev=> drop.addEventListener(ev, e=>{ e.preventDefault(); e.stopPropagation(); drop.classList.add('drag'); }));
+    ;['dragleave','drop'].forEach(ev=> drop.addEventListener(ev, e=>{ e.preventDefault(); e.stopPropagation(); drop.classList.remove('drag'); }));
+    drop.addEventListener('drop', e=>{
+      const f = e.dataTransfer.files?.[0];
+      if(f) handleFile(f);
+    });
+    fileInput.addEventListener('change', e=>{
+      const f = e.target.files?.[0];
+      if(f) handleFile(f);
+    });
+
+    function handleFile(file){
+      statusSpan.textContent = `Loaded: ${file.name}`;
+      const ext = file.name.split('.').pop().toLowerCase();
+      if(ext === 'csv'){
+        parseCSV(file);
+      }else{
+        parseXLSX(file);
+      }
+    }
+
+    // CSV parse
+    function parseCSV(file){
+      const reader = new FileReader();
+      reader.onload = e=>{
+        const text = e.target.result;
+        const arr = text.split(/\r?\n/).filter(Boolean).map(line=>{
+          // Split CSV (simple)
+          const out=[]; let cur=''; let q=false;
+          for(let i=0;i<line.length;i++){
+            const c=line[i];
+            if(c === '"' ){ if(q && line[i+1] === '"'){ cur+='"'; i++; } else { q=!q; } }
+            else if(c === ',' && !q){ out.push(cur); cur=''; }
+            else{ cur+=c; }
+          }
+          out.push(cur);
+          return out;
+        });
+        setRows(arr);
+      };
+      reader.readAsText(file);
+    }
+
+    // XLSX parse
+    function parseXLSX(file){
+      const reader = new FileReader();
+      reader.onload = e=>{
+        const data = new Uint8Array(e.target.result);
+        const wb = XLSX.read(data, {type:'array'});
+        const wsname = wb.SheetNames[0];
+        const ws = wb.Sheets[wsname];
+        const json = XLSX.utils.sheet_to_json(ws, {header:1, raw:true, defval:''});
+        setRows(json);
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    function setRows(arr){
+      if(!arr || !arr.length){ rows = []; headers=[]; drawPreview(); validateHeaders(); return; }
+      rows = arr.filter(r=> r.some(v=> String(v).trim() !== ''));
+      headers = rows[0].map(h=> String(h).trim());
+      drawPreview();
+      validateHeaders();
+    }
+
+    function drawPreview(){
+      if(!rows.length){ tbl.style.display='none'; thead.innerHTML=''; tbody.innerHTML=''; return; }
+      tbl.style.display='';
+      // head
+      thead.innerHTML = `<tr>${headers.map(h=>`<th>${escapeHtml(h)}</th>`).join('')}</tr>`;
+      // body (limit 100 rows for preview)
+      const limited = rows.slice(1, 101);
+      tbody.innerHTML = limited.map(r=> `<tr>${headers.map((_,i)=> `<td>${escapeHtml(r[i] ?? '')}</td>`).join('')}</tr>`).join('');
+    }
+
+    function validateHeaders(){
+      if(!headers.length){ valSpan.textContent = 'Headers: —'; btnSave.disabled = true; ready = false; return; }
+      const need = SCHEMAS[datasetSel.value].headers;
+      const missing = need.filter(h=> !headers.includes(h));
+      if(missing.length){
+        valSpan.innerHTML = `Headers: <span class="bad">Missing → ${missing.join(', ')}</span>`;
+        btnSave.disabled = true; ready = false;
+      }else{
+        valSpan.innerHTML = `Headers: <span class="good">OK</span>`;
+        btnSave.disabled = false; ready = true;
+      }
+    }
+
+    function escapeHtml(s){
+      return String(s).replace(/[&<>"']/g, m=> ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+    }
+
+    // Transform & Save
+    btnSave.addEventListener('click', ()=>{
+      if(!ready){ alert('Fix headers first.'); return; }
+      if(rows.length <= 1){ alert('No data rows found.'); return; }
+
+      const ds = datasetSel.value;
+      const dataRows = rows.slice(1);
+      let out = null;
+
+      try{
+        if(ds === 'employees'){
+          // { role: { name: {city,status,doj,dol,code,salary} } }
+          out = {};
+          dataRows.forEach(r=>{
+            const row = objFrom(r, headers);
+            const role = (row.role||'').trim();
+            const name = (row.name||'').trim();
+            if(!role || !name) return;
+            if(!out[role]) out[role] = {};
+            out[role][name] = {
+              city: row.city || '',
+              status: row.status || '',
+              doj: (row.doj||'').trim() || null,
+              dol: (row.dol||'').trim() || null,
+              code: row.code || '',
+              salary: toNumber(row.salary)
+            };
+          });
+          localStorage.setItem('ms_employees', JSON.stringify(out));
+        }
+        else if(ds === 'perfFOS'){
+          // { name: { "YYYY-MM": {total,cancelled,marketing,infra,revenue} } }
+          out = {};
+          dataRows.forEach(r=>{
+            const row = objFrom(r, headers);
+            const name = (row.name||'').trim();
+            const month = (row.month||'').trim();
+            if(!name || !month) return;
+            if(!out[name]) out[name] = {};
+            out[name][month] = {
+              total: toNumber(row.total),
+              cancelled: toNumber(row.cancelled),
+              marketing: toNumber(row.marketing),
+              infra: toNumber(row.infra),
+              revenue: toNumber(row.revenue)
+            };
+          });
+          localStorage.setItem('ms_perfFOS', JSON.stringify(out));
+        }
+        else if(ds === 'salesFOS'){
+          // { name: [ {date,project,client,unit,status,revenue}, ... ] }
+          out = {};
+          dataRows.forEach(r=>{
+            const row = objFrom(r, headers);
+            const name = (row.name||'').trim();
+            if(!name) return;
+            if(!out[name]) out[name] = [];
+            out[name].push({
+              date: (row.date||'').trim(),
+              project: row.project || '',
+              client: row.client || '',
+              unit: row.unit || '',
+              status: row.status || '',
+              revenue: toNumber(row.revenue)
+            });
+          });
+          // optional: stable sort by date
+          Object.keys(out).forEach(k=>{
+            out[k].sort((a,b)=> new Date(a.date) - new Date(b.date));
+          });
+          localStorage.setItem('ms_salesFOS', JSON.stringify(out));
+        }
+        else if(ds === 'matrixFOS'){
+          // { name: { "YYYY-MM": {calls,connected,duration,svSched,svDone,mtgSched,mtgDone,dailyWork} } }
+          out = {};
+          dataRows.forEach(r=>{
+            const row = objFrom(r, headers);
+            const name = (row.name||'').trim();
+            const month = (row.month||'').trim();
+            if(!name || !month) return;
+            if(!out[name]) out[name] = {};
+            out[name][month] = {
+              calls: toNumber(row.calls),
+              connected: toNumber(row.connected),
+              duration: toNumber(row.duration),
+              svSched: toNumber(row.svSched),
+              svDone: toNumber(row.svDone),
+              mtgSched: toNumber(row.mtgSched),
+              mtgDone: toNumber(row.mtgDone),
+              dailyWork: toNumber(row.dailyWork)
+            };
+          });
+          localStorage.setItem('ms_matrixFOS', JSON.stringify(out));
+        }
+
+        statusSpan.textContent = 'Saved ✔';
+        alert('Saved to browser (localStorage). Open your dashboard and load from ms_* keys.');
+      }catch(err){
+        console.error(err);
+        alert('Save failed. See console for details.');
+      }
+    });
+
+    function objFrom(row, hdrs){
+      const o = {};
+      hdrs.forEach((h,i)=> o[h] = row[i]);
+      return o;
+    }
+    function toNumber(v){
+      const n = Number(String(v||'').toString().replace(/[, ]/g,''));
+      return isFinite(n) ? n : 0;
+    }
+
+    // Export all ms_* as one JSON file
+    btnExportJSON.addEventListener('click', ()=>{
+      const obj = {
+        ms_employees: safeParse(localStorage.getItem('ms_employees')),
+        ms_perfFOS: safeParse(localStorage.getItem('ms_perfFOS')),
+        ms_salesFOS: safeParse(localStorage.getItem('ms_salesFOS')),
+        ms_matrixFOS: safeParse(localStorage.getItem('ms_matrixFOS')),
+      };
+      const blob = new Blob([JSON.stringify(obj, null, 2)], {type:'application/json'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'main-source-export.json'; a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    // Clear saved
+    btnClear.addEventListener('click', ()=>{
+      if(!confirm('Clear ms_employees, ms_perfFOS, ms_salesFOS, ms_matrixFOS from localStorage?')) return;
+      ['ms_employees','ms_perfFOS','ms_salesFOS','ms_matrixFOS'].forEach(k=> localStorage.removeItem(k));
+      alert('Cleared.');
+    });
+
+    function safeParse(s){ try{ return s? JSON.parse(s) : null; }catch{ return null; } }
+  </script>
+</body>
+</html>

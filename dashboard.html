@@ -1,0 +1,1348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Agent Performance Dashboard</title>
+  <style>
+    /* =====================  DARK THEME on PURPLE GRADIENT  ===================== */
+    :root{
+      --card:#1b1d36; --text:#ffffff; --muted:rgba(255,255,255,.80);
+      --border:rgba(255,255,255,.10); --ok:#20c997; --err:#ff6b6b;
+      --thead:#13142c;
+      --totalsA:rgba(255,255,255,.06); --totalsB:rgba(255,255,255,.08);
+      --primary:#ffffff; --primaryText:#2e2a8f;
+
+      --bg-gradient:
+        radial-gradient(1200px 800px at 20% 20%, #6c5cd7 0%, rgba(108,92,215,.85) 30%, rgba(92,76,196,.85) 55%, rgba(78,62,178,.9) 75%, #4e3eb2 100%),
+        linear-gradient(180deg, #5c4cc8 0%, #4b3aa6 100%);
+    }
+    *{ box-sizing:border-box; }
+    body{
+      margin:0; font-family:system-ui, Arial, sans-serif; color:var(--text);
+      background:var(--bg-gradient); background-attachment:fixed; min-height:100vh;
+    }
+
+    /* Header */
+    header{
+      display:flex; align-items:center; gap:12px; padding:12px 16px;
+      background:rgba(27,29,54,.92); border-bottom:1px solid var(--border);
+      position:sticky; top:0; z-index:5; backdrop-filter: blur(6px);
+    }
+    .brand-logo{ height:32px; width:auto; object-fit:contain; }
+    header h1{ margin:0; font-size:18px; font-weight:700; }
+    .hdr-actions{ margin-left:auto; display:flex; gap:8px; flex-wrap:wrap; }
+    .btn{
+      padding:8px 12px; border-radius:10px; border:1px solid var(--border);
+      background:#0f1129; color:#fff; font-weight:700; cursor:pointer; text-decoration:none;
+      display:inline-block;
+    }
+    .btn.primary{ background:var(--primary); color:var(--primaryText); border-color:transparent; }
+
+    .wrap{ width: clamp(1024px, 96vw, 1600px); margin:0 auto; padding:0 8px 16px; }
+    .top-actions{ padding:12px 16px 8px; }
+    .back-link{ background:var(--primary); color:var(--primaryText); border-color:transparent; }
+
+    /* Boxes / Filters */
+    .filters{ display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap:16px; }
+    .box{
+      background:rgba(27,29,54,.92); border:1px solid var(--border); border-radius:12px;
+      padding:14px; display:flex; flex-direction:column; gap:10px; backdrop-filter: blur(4px);
+    }
+    .box h3{ margin:0; font-size:14px; font-weight:700; }
+    .hint{ font-size:12px; color:var(--muted); margin-top:-4px; }
+    .field{
+      background:#0f1129; border:1px solid var(--border); border-radius:10px;
+      padding:8px 10px; display:flex; align-items:center; gap:8px; position:relative;
+    }
+    label{ font-size:13px; color:var(--muted); white-space:nowrap; }
+    select, input[type="text"]{ flex:1; background:transparent; color:#fff; border:none; outline:none; font-size:14px; min-width:0; }
+    .toolbar{ display:grid; grid-template-columns: 1fr 100px; gap:8px; align-items:center; }
+
+    /* Autocomplete */
+    .ac-wrap{ position:relative; }
+    .ac-list{
+      position:absolute; left:0; right:0; top:calc(100% + 6px);
+      background:#0f1129; border:1px solid var(--border); border-radius:10px;
+      box-shadow:0 12px 32px rgba(0,0,0,.45); max-height:260px; overflow:auto; z-index:10; display:none;
+    }
+    .ac-list.open{ display:block; }
+    .ac-item{ padding:8px 10px; font-weight:600; cursor:pointer; user-select:none; border-bottom:1px solid rgba(255,255,255,.05); }
+    .ac-item:last-child{ border-bottom:none; }
+    .ac-item:hover,.ac-item.active{ background:#1a1d3b; }
+    .ac-empty{ padding:8px 10px; color:var(--muted); }
+
+    /* Details */
+    .detail-list{ display:grid; grid-template-columns: 160px 1fr; gap:6px 10px; }
+    .d-label{ color:var(--muted); font-size:12px; }
+    .d-value{ font-weight:700; font-size:13px; }
+    .badge{ display:inline-block; padding:3px 8px; border-radius:999px; font-weight:700; font-size:11px; border:1px solid var(--border); }
+    .badge.ok{ background:rgba(32,201,151,.15); color:#b3ffe8; border-color:rgba(32,201,151,.35); }
+    .badge.err{ background:rgba(255,107,107,.15); color:#ffd4d4; border-color:rgba(255,255,255,.35); }
+
+    /* Tables */
+    .table-section{ margin-top:16px; display:none; }
+    .table-card{ background:rgba(27,29,54,.92); border:1px solid var(--border); border-radius:12px; padding:12px; }
+    .table-title{ margin:0 0 8px; font-size:14px; font-weight:800; }
+    .table-wrap{ overflow:auto; }
+    table{ width:100%; border-collapse:separate; border-spacing:0; min-width:1180px; }
+    thead th{
+      position:sticky; top:0; background:var(--thead); color:#fff; text-align:left; padding:10px 12px;
+      border-bottom:1px solid var(--border); z-index:3; font-size:13px;
+    }
+    tbody td{ padding:10px 12px; border-bottom:1px solid rgba(255,255,255,.06); color:#e9e9f3; font-size:13px; }
+    tbody tr:hover{ background:rgba(255,255,255,.03); }
+    .num{ text-align:right; white-space:nowrap; }
+    .muted{ color:var(--muted); }
+    .totals-row td{
+      position:sticky; top:42px;
+      background:linear-gradient(0deg, var(--totalsA), var(--totalsB));
+      font-weight:800; z-index:2; border-bottom-color:rgba(255,255,255,.18);
+    }
+    .pill{ display:inline-block; padding:4px 10px; border-radius:999px; font-weight:700; font-size:11px; border:1px solid var(--border); }
+    .pill.CONFIRMED{ background:rgba(32,201,151,.15); color:#b3ffe8; border-color:rgba(32,201,151,.35); }
+    .pill.not-CONFIRMED{ background:rgba(255,193,7,.15); color:#ffe9b3; border-color:rgba(255,193,7,.35); }
+    .pill.cancelled{ background:rgba(255,107,107,.15); color:#ffd4d4; border-color:rgba(255,255,255,.35); }
+    th[data-sort]{ cursor:pointer; user-select:none; }
+    th[data-sort]::after{ content:' ⇅'; opacity:.35; }
+    th.sorted-asc::after{ content:' ▲'; opacity:.9; }
+    th.sorted-desc::after{ content:' ▼'; opacity:.9; }
+    .surplus{ color:#a8f0c6; font-weight:700; }
+    .deficit{ color:#ffb3b3; font-weight:700; }
+
+    /* PRINT */
+    @page{ size:A4; margin:10mm; }
+    @media print{
+      body{ -webkit-print-color-adjust:exact; print-color-adjust:exact; background:#fff; color:#000; }
+      header{ position:static; background:#fff; color:#000; border-bottom:1px solid #ccc; }
+      header h1{ color:#000; }
+      .top-actions,.hdr-actions{ display:none !important; }
+      .wrap{ width:auto; padding:0; }
+      .filters{ display:none; }
+      .table-section{ margin-top:8px; }
+      .table-card{ background:#fff; border:1px solid #ddd; padding:8px; break-inside:auto; }
+      .table-title{ color:#000; margin-bottom:6px; font-size:13px; }
+      .table-wrap{ overflow:visible !important; }
+      thead th{ position:static; background:#f6f6f6; color:#000; border-bottom:1px solid #ccc; }
+      thead{ display:table-header-group; }
+      tfoot{ display:table-row-group; }
+      tr, td, th{ page-break-inside:avoid; }
+      td, th{ padding:6px 8px; font-size:11.5px; }
+      .totals-row td{ position:static; background:#eee; }
+      .pill{ border:1px solid #999 !important; background:#fafafa !important; color:#000 !important; }
+      .surplus, .deficit{ color:#000 !important; }
+    }
+
+    @media (max-width:1200px){ .filters{ grid-template-columns: repeat(2, minmax(0,1fr)); } }
+    @media (max-width:640px){ .filters{ grid-template-columns:1fr; } .detail-list{ grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <header>
+    <img class="brand-logo" src="logo.png" alt="Realty Assistant logo" />
+    <h1>Agent Performance Dashboard</h1>
+    <div class="hdr-actions">
+      <button class="btn" id="btnExport">⬇️ Export (Excel/CSV)</button>
+      <button class="btn primary" id="btnPrint">🖨️ Print</button>
+      <!-- MAIN SOURCE LINK (opens main-source.html in same tab) -->
+      <a class="btn" id="btnSource" href="main-source.html">📊 Main Source</a>
+      <!-- For new tab, use: <a class="btn" href="main-source.html" target="_blank" rel="noopener">📊 Main Source</a> -->
+    </div>
+  </header>
+
+  <div class="wrap">
+    <div class="top-actions">
+      <a class="btn back-link" href="index.html">← Back to Welcome</a>
+    </div>
+
+    <!-- Filters -->
+    <section class="filters">
+      <div class="box">
+        <h3>Please select Role Type</h3>
+        <p class="hint">Role Types: FOS, Team Leader, Area Manager, President</p>
+        <div class="field">
+          <label for="role">Role</label>
+          <select id="role" aria-label="Select Role">
+            <option value="FOS">FOS</option>
+            <option value="Team Leader">Team Leader</option>
+            <option value="Area Manager">Area Manager</option>
+            <option value="President">President</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="box">
+        <h3>Please select or Search Name</h3>
+        <p class="hint">Type to search, then press Enter or click</p>
+        <div class="toolbar">
+          <div class="field ac-wrap">
+            <label for="search">Search</label>
+            <input id="search" type="text" placeholder="Search name..." autocomplete="off" aria-expanded="false" aria-controls="ac-list" />
+            <div id="ac-list" class="ac-list" role="listbox" aria-label="Name suggestions"></div>
+          </div>
+          <button class="btn" id="resetFilters" type="button">Reset</button>
+        </div>
+      </div>
+
+      <div class="box">
+        <h3>Employee Details</h3>
+        <div class="detail-list">
+          <div class="d-label">City</div>        <div class="d-value" id="dCity">—</div>
+          <div class="d-label">Status</div>      <div class="d-value" id="dStatus">—</div>
+          <div class="d-label">DOJ</div>         <div class="d-value" id="dDOJ">—</div>
+          <div class="d-label" id="dolLabel" style="display:none;">DOL</div>
+          <div class="d-value" id="dDOL" style="display:none;">—</div>
+          <div class="d-label">Employee Code</div><div class="d-value" id="dCode">—</div>
+          <div class="d-label">Last Salary</div> <div class="d-value" id="dSalary">—</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 1) Monthly Performance -->
+    <section id="fosTableSection" class="table-section">
+      <div class="table-card">
+        <h3 class="table-title">Monthly Performance (FOS)</h3>
+        <div class="table-wrap">
+          <table id="tblPerformance">
+            <thead>
+              <tr>
+                <th>Month</th>
+                <th class="num">Total Units</th>
+                <th class="num">Cancelled Units</th>
+                <th class="num">Active Units</th>
+                <th class="num">Salary</th>
+                <th class="num">Marketing Expense</th>
+                <th class="num">Infra</th>
+                <th class="num">Revenue</th>
+                <th class="num">Salary × 5</th>
+                <th class="num">X Achieved</th>
+                <th class="num">Surplus / Deficit</th>
+              </tr>
+            </thead>
+            <tbody id="fosTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2) Sales Details -->
+    <section id="fosSalesSection" class="table-section">
+      <div class="table-card">
+        <h3 class="table-title">Sales Details (FOS)</h3>
+        <div class="table-wrap">
+          <table id="tblSales">
+            <thead>
+              <tr id="fosSalesHeaders">
+                <th data-sort="date">Booking Date</th>
+                <th data-sort="project">Project</th>
+                <th data-sort="client">Client Name</th>
+                <th data-sort="unit">Unit No.</th>
+                <th data-sort="status">Status</th>
+                <th data-sort="revenue" class="num">Revenue</th>
+                <th data-sort="flag" class="num">Status Flag</th>
+              </tr>
+            </thead>
+            <tbody id="fosSalesBody"></tbody>
+          </table>
+        </div>
+        <p class="muted">Status Flag: Cancelled = 0, otherwise = 1</p>
+      </div>
+    </section>
+
+    <!-- 3) Input Matrix -->
+    <section id="fosMatrixSection" class="table-section">
+      <div class="table-card">
+        <h3 class="table-title">Input Matrix (FOS)</h3>
+        <div class="table-wrap">
+          <table id="tblMatrix">
+            <thead>
+              <tr>
+                <th>Month</th>
+                <th class="num">Total Calls</th>
+                <th class="num">Connected Calls</th>
+                <th class="num">Duration (mins)</th>
+                <th class="num">Site Visits Scheduled</th>
+                <th class="num">Site Visits Done</th>
+                <th class="num">Meetings Scheduled</th>
+                <th class="num">Meetings Done</th>
+                <th class="num">Daily Work (entries)</th>
+              </tr>
+            </thead>
+            <tbody id="fosMatrixBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    /* ===== Employees (ALL ROLES) ===== */
+    const employees = {
+      "FOS": {
+        "AASHIKA.GUPTA": { city: "NOIDA", status: "ACTIVE", doj: "2025-01-13", dol: null, code: "MT424", salary: 21100 },
+"ABHAY.AHLAWAT": { city: "NOIDA", status: "IN-ACTIVE", doj: "2025-01-13", dol: "2025-06-12", code: "MT425", salary: 21100 },
+"ABHAY.YADAV": { city: "NOIDA", status: "ACTIVE", doj: "2023-02-23", dol: null, code: "MT152/RA1879", salary: 42000 },
+"ABHISHEK.KUMARRA": { city: "NOIDA", status: "IN-ACTIVE", doj: "2025-03-03", dol: "2025-05-06", code: "RA3477", salary: 48600 },
+"ACHYUTAM.ANAND": { city: "NOIDA", status: "ACTIVE", doj: "2024-07-01", dol: null, code: "MT416/RA3357", salary: 30000 },
+"ANKIT.1RA": { city: "NOIDA", status: "IN-ACTIVE", doj: "2025-01-21", dol: "2025-05-02", code: "RA3327", salary: 52600 },
+"ANUBHAV.TIWARI": { city: "NOIDA", status: "ACTIVE", doj: "2025-01-13", dol: null, code: "MT429", salary: 25100 },
+"ANUJ.KUMAR1RA": { city: "NOIDA", status: "ACTIVE", doj: "2025-06-03", dol: null, code: "RA3675", salary: 34600 },
+"AREEB.AFTAB": { city: "NOIDA", status: "IN-ACTIVE", doj: "2025-02-18", dol: "2025-07-31", code: "MT518", salary: 21100 },
+"ARJUN.GUSAIN": { city: "NOIDA", status: "IN-ACTIVE", doj: "2025-02-18", dol: "2025-06-13", code: "MT519", salary: 21100 },
+"ASHA.JOSHI": { city: "NOIDA", status: "ACTIVE", doj: "2025-06-24", dol: null, code: "RA3749", salary: 35000 },
+"AYUSHI.RA": { city: "NOIDA", status: "IN-ACTIVE", doj: "2025-05-05", dol: "2025-05-10", code: "RA3575", salary: 27600 },
+"CHAKSHIKA.VASHISHET": { city: "NOIDA", status: "IN-ACTIVE", doj: "2025-01-13", dol: "2025-06-12", code: "MT433", salary: 21100 },
+"CHIRAG.DHULIA": { city: "NOIDA", status: "IN-ACTIVE", doj: "2025-06-03", dol: "2025-07-02", code: "RA3674", salary: 5000 },
+"DIGVIJAY.SINGHRA": { city: "NOIDA", status: "ACTIVE", doj: "2025-01-13", dol: null, code: "MT435", salary: 28000 },
+"DIVYA.SINGHRA": { city: "NOIDA", status: "IN-ACTIVE", doj: "2025-02-25", dol: "2025-06-09", code: "RA3453", salary: 54600 },
+"GANPATI.CHOUDHARY": { city: "NOIDA", status: "ACTIVE", doj: "2025-02-18", dol: null, code: "MT526", salary: 28000 },
+"JITENDRA.KUMAR1RA": { city: "NOIDA", status: "ACTIVE", doj: "2025-02-11", dol: null, code: "RA3401", salary: 32100 },
+"KARTIK.GARG": { city: "NOIDA", status: "IN-ACTIVE", doj: "2025-01-13", dol: "2025-06-12", code: "MT445", salary: 28000 },
+"KIRTI.AGGARWAL": { city: "NOIDA", status: "ACTIVE", doj: "2025-01-13", dol: null, code: "MT447", salary: 28000 },
+"KONIKA.PRAJAPATI": { city: "NOIDA", status: "IN-ACTIVE", doj: "2025-02-18", dol: "2025-06-27", code: "MT531", salary: 28000 },
+"KSHITIZ.AGARWAL": { city: "NOIDA", status: "IN-ACTIVE", doj: "2024-11-26", dol: "2025-05-06", code: "RA3080", salary: 44600 },
+"LAXMI.YADAV": { city: "NOIDA", status: "ACTIVE", doj: "2025-03-18", dol: null, code: "RA3511", salary: 31000 },
+"MOHIT.GAUR": { city: "NOIDA", status: "IN-ACTIVE", doj: "2025-06-16", dol: "2025-06-23", code: "RA3725", salary: 35600 },
+"MRIDULA.RA": { city: "NOIDA", status: "IN-ACTIVE", doj: "2025-01-13", dol: "2025-06-12", code: "MT452", salary: 28000 },
+"MUKESH.KUMAR": { city: "NOIDA", status: "IN-ACTIVE", doj: "2025-01-21", dol: "2025-05-03", code: "RA3330", salary: 64000 },
+"NISHA.RA1": { city: "NOIDA", status: "ACTIVE", doj: "2024-08-13", dol: null, code: "RA2706", salary: 21806 },
+"NITISH.TIWARI": { city: "NOIDA", status: "ACTIVE", doj: "2025-01-13", dol: null, code: "MT455", salary: 28000 },
+"PARTH.SHARMA": { city: "NOIDA", status: "ACTIVE", doj: "2025-01-13", dol: null, code: "MT457", salary: 28000 },
+"PRINCE.GUPTA": { city: "NOIDA", status: "ACTIVE", doj: "2025-04-08", dol: null, code: "RA3552", salary: 74600 },
+"PRIYANKA.KUMARI1RA": { city: "NOIDA", status: "IN-ACTIVE", doj: "2025-01-13", dol: "2025-05-06", code: "MT459", salary: 28000 },
+"RAHUL.SHARMARA1": { city: "NOIDA", status: "IN-ACTIVE", doj: "2025-03-18", dol: "2025-06-17", code: "RA3512", salary: 36000 },
+"RAJEEV.KUMAR": { city: "NOIDA", status: "IN-ACTIVE", doj: "2025-02-18", dol: "2025-05-16", code: "RA3420", salary: 31000 },
+"RAKESH.RUSTAM": { city: "NOIDA", status: "IN-ACTIVE", doj: "2025-01-21", dol: "2025-05-06", code: "RA3329", salary: 78045 },
+"RASHI.PARMAR": { city: "NOIDA", status: "ACTIVE", doj: "2025-01-13", dol: null, code: "MT461", salary: 21100 },
+"RITIK.RA": { city: "NOIDA", status: "ACTIVE", doj: "2025-03-18", dol: null, code: "RA3510", salary: 34600 },
+"RIYA.BAINS": { city: "NOIDA", status: "IN-ACTIVE", doj: "2025-02-18", dol: "2025-06-07", code: "MT543", salary: 28000 },
+"ROHIL.BHARGAV": { city: "NOIDA", status: "IN-ACTIVE", doj: "2025-03-11", dol: "2025-07-08", code: "RA3501", salary: 35000 },
+"RUDRA.VERMA": { city: "NOIDA", status: "ACTIVE", doj: "2025-06-24", dol: null, code: "RA3760", salary: 36000 },
+"SALONI.KUMARI": { city: "NOIDA", status: "ACTIVE", doj: "2025-04-02", dol: null, code: "RA3533", salary: 24000 },
+"SALONI.SINHA": { city: "NOIDA", status: "IN-ACTIVE", doj: "2025-03-03", dol: "2025-05-01", code: "RA3466", salary: 58000 },
+"SANDEEP.SINGH": { city: "NOIDA", status: "ACTIVE", doj: "2025-02-11", dol: null, code: "RA3404", salary: 29600 },
+"SANJEEV.KUMAR": { city: "NOIDA", status: "ACTIVE", doj: "2025-04-02", dol: null, code: "RA3531", salary: 23000 },
+"SAUMYA.KUMARI": { city: "NOIDA", status: "ACTIVE", doj: "2025-01-13", dol: null, code: "MT469", salary: 28000 },
+"SAURAV.DEY": { city: "NOIDA", status: "ACTIVE", doj: "2025-04-02", dol: null, code: "RA3530", salary: 36600 },
+"SIMRAN.RA": { city: "NOIDA", status: "ACTIVE", doj: "2025-06-10", dol: null, code: "RA3695", salary: 26000 },
+"SUNIL.LUHAR": { city: "NOIDA", status: "ACTIVE", doj: "2025-02-18", dol: null, code: "RA3426", salary: 27600 },
+"SURBHI.RA": { city: "NOIDA", status: "ACTIVE", doj: "2024-07-16", dol: null, code: "RA2545", salary: 23600 },
+"SWAYAM.MOHANTY": { city: "NOIDA", status: "IN-ACTIVE", doj: "2025-02-18", dol: "2025-07-22", code: "MT554", salary: 25100 },
+"TANYA.YADAV": { city: "NOIDA", status: "IN-ACTIVE", doj: "2025-06-24", dol: "2025-07-07", code: "RA3759", salary: 23000 },
+"VAIBHAV.NITWAL": { city: "NOIDA", status: "IN-ACTIVE", doj: "2025-01-13", dol: "2025-06-17", code: "MT473", salary: 28000 },
+"VAIBHAV.PUNDIR": { city: "NOIDA", status: "IN-ACTIVE", doj: "2025-06-30", dol: "2025-07-25", code: "RA3833", salary: 55000 },
+"VANSH.TANEJA": { city: "NOIDA", status: "IN-ACTIVE", doj: "2025-01-13", dol: "2025-06-10", code: "MT474", salary: 25100 },
+"YASH.MEHROTRA": { city: "NOIDA", status: "IN-ACTIVE", doj: "2024-07-27", dol: "2025-05-28", code: "MT423/RA3358", salary: 26100 }
+      },
+      "Team Leader": {
+        "D": { city: "Noida",   status: "Active",   doj: "2022-03-05", dol: null,        code: "RA-TL-010", salary: 45000 },
+        "E": { city: "Delhi",   status: "Inactive", doj: "2021-08-20", dol: "2023-12-31", code: "RA-TL-011", salary: 42000 },
+        "F": { city: "Gurgaon", status: "Active",   doj: "2023-11-11", dol: null,        code: "RA-TL-012", salary: 47000 }
+      },
+      "Area Manager": {
+        "G": { city: "Noida",   status: "Active",   doj: "2020-06-15", dol: null,        code: "RA-AM-101", salary: 65000 },
+        "H": { city: "Kanpur",  status: "Inactive", doj: "2019-04-10", dol: "2022-10-05", code: "RA-AM-102", salary: 60000 },
+        "I": { city: "Lucknow", status: "Active",   doj: "2021-01-20", dol: null,        code: "RA-AM-103", salary: 68000 }
+      },
+      "President": {
+        "X": { city: "Noida",  status: "Active",   doj: "2016-02-01", dol: null,        code: "RA-PR-901", salary: 150000 },
+        "Y": { city: "Mumbai", status: "Active",   doj: "2018-09-10", dol: null,        code: "RA-PR-902", salary: 155000 },
+        "Z": { city: "Delhi",  status: "Inactive", doj: "2015-01-15", dol: "2024-03-31", code: "RA-PR-903", salary: 148000 }
+      }
+    };
+
+    /* ==== Monthly data (FOS) includes infra ==== */
+    const perfFOS = {
+      "ABHAY.YADAV":{"2023-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:9000},
+"2023-03": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:42000},
+"2023-04": { total:2, cancelled:0, marketing:0, infra:0, revenue:648000,salary:42000},
+"2023-05": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:42000},
+"2023-06": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:42000},
+"2023-07": { total:1, cancelled:0, marketing:0, infra:0, revenue:124200,salary:42000},
+"2023-08": { total:1, cancelled:0, marketing:0, infra:0, revenue:501962,salary:42000},
+"2023-09": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:42000},
+"2023-10": { total:1, cancelled:1, marketing:0, infra:0, revenue:0,salary:42000},
+"2023-11": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:42000},
+"2023-12": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:42000},
+"2024-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:42000},
+"2024-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:42000},
+"2024-03": { total:1, cancelled:1, marketing:0, infra:0, revenue:0,salary:42000},
+"2024-04": { total:1, cancelled:0, marketing:0, infra:0, revenue:255684,salary:42000},
+"2024-05": { total:1, cancelled:1, marketing:0, infra:0, revenue:0,salary:42000},
+"2024-06": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:42000},
+"2024-07": { total:1, cancelled:0, marketing:0, infra:0, revenue:280660,salary:42000},
+"2024-08": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:42000},
+"2024-09": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:42000},
+"2024-10": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:42000},
+"2024-11": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:42000},
+"2024-12": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:42000},
+"2025-01": { total:6, cancelled:4, marketing:0, infra:0, revenue:1104660,salary:42000},
+"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:42000},
+"2025-03": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:42000},
+"2025-04": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:42000},
+"2025-05": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:42000},
+"2025-06": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:42000},
+"2025-07": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:42000},
+"2025-08": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:9484}},
+"ACHYUTAM.ANAND":{"2024-07": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:30000},
+"2024-07": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:30000},
+"2024-07": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:30000},
+"2024-07": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:30000},
+"2024-07": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:30000},
+"2024-07": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:30000},
+"2024-07": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:30000},
+"2024-07": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:30000},
+"2024-07": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:30000},
+"2024-07": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:30000},
+"2024-07": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:30000},
+"2024-07": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:30000},
+"2024-07": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:30000},
+"2024-07": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:30000}},
+"YASH.MEHROTRA":{"2024-07": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:4210},
+"2024-07": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:4210},
+"2024-07": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:4210},
+"2024-07": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:4210},
+"2024-07": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:4210},
+"2024-07": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:4210},
+"2024-07": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:4210},
+"2024-07": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:4210},
+"2024-07": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:4210},
+"2024-07": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:4210},
+"2024-07": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:4210}},
+"SURBHI.RA":{"2024-07": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:12181},
+"2024-07": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:12181},
+"2024-07": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:12181},
+"2024-07": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:12181},
+"2024-07": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:12181},
+"2024-07": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:12181},
+"2024-07": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:12181},
+"2024-07": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:12181},
+"2024-07": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:12181},
+"2024-07": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:12181},
+"2024-07": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:12181},
+"2024-07": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:12181},
+"2024-07": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:12181},
+"2024-07": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:12181}},
+"NISHA.RA1":{"2024-08": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:13365},
+"2024-09": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:21806},
+"2024-10": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:21806},
+"2024-11": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:21806},
+"2024-12": { total:3, cancelled:3, marketing:0, infra:0, revenue:0,salary:21806},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:21806},
+"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:21806},
+"2025-03": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:21806},
+"2025-04": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:21806},
+"2025-05": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:21806},
+"2025-06": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:21806},
+"2025-07": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:21806},
+"2025-08": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:4924}},
+"KSHITIZ.AGARWAL":{"2024-11": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:7433},
+"2024-12": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:44600},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:44600},
+"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:44600},
+"2025-03": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:44600},
+"2025-04": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:44600},
+"2025-05": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:8632}},
+"AASHIKA.GUPTA":{"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:12932},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:12932},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:12932},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:12932},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:12932},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:12932},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:12932},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:12932}},
+"ABHAY.AHLAWAT":{"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:12932},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:12932},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:12932},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:12932},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:12932},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:12932}},
+"ANUBHAV.TIWARI":{"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:15384},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:15384},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:15384},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:15384},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:15384},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:15384},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:15384},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:15384}},
+"CHAKSHIKA.VASHISHET":{"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:12932},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:12932},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:12932},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:12932},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:12932},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:12932}},
+"DIGVIJAY.SINGHRA":{"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:17161},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:17161},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:17161},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:17161},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:17161},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:17161},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:17161},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:17161}},
+"KARTIK.GARG":{"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:17161},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:17161},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:17161},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:17161},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:17161},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:17161}},
+"KIRTI.AGGARWAL":{"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:17161},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:17161},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:17161},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:17161},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:17161},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:17161},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:17161},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:17161}},
+"MRIDULA.RA":{"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:17161},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:17161},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:17161},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:17161},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:17161},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:17161}},
+"NITISH.TIWARI":{"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:17161},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:17161},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:17161},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:17161},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:17161},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:17161},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:17161},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:17161}},
+"PARTH.SHARMA":{"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:17161},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:17161},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:17161},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:17161},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:17161},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:17161},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:17161},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:17161}},
+"PRIYANKA.KUMARI1RA":{"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:17161},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:17161},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:17161},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:17161},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:17161}},
+"RASHI.PARMAR":{"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:12932},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:12932},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:12932},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:12932},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:12932},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:12932},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:12932},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:12932}},
+"SAUMYA.KUMARI":{"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:17161},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:17161},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:17161},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:17161},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:17161},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:17161},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:17161},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:17161}},
+"VAIBHAV.NITWAL":{"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:17161},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:17161},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:17161},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:17161},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:17161},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:17161}},
+"VANSH.TANEJA":{"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:15384},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:15384},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:15384},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:15384},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:15384},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:15384}},
+"ANKIT.1RA":{"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:18665},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:18665},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:18665},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:18665},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:18665}},
+"RAKESH.RUSTAM":{"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:27693},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:27693},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:27693},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:27693},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:27693}},
+"MUKESH.KUMAR":{"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:22710},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:22710},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:22710},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:22710},
+"2025-01": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:22710}},
+"AREEB.AFTAB":{"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:8289},
+"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:8289},
+"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:8289},
+"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:8289},
+"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:8289},
+"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:8289}},
+"ARJUN.GUSAIN":{"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:8289},
+"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:8289},
+"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:8289},
+"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:8289},
+"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:8289}},
+"GANPATI.CHOUDHARY":{"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:11000},
+"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:11000},
+"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:11000},
+"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:11000},
+"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:11000},
+"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:11000},
+"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:11000}},
+"KONIKA.PRAJAPATI":{"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:11000},
+"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:11000},
+"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:11000},
+"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:11000},
+"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:11000}},
+"RIYA.BAINS":{"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:11000},
+"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:11000},
+"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:11000},
+"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:11000},
+"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:11000}},
+"SWAYAM.MOHANTY":{"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:9861},
+"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:9861},
+"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:9861},
+"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:9861},
+"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:9861},
+"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:9861}},
+"JITENDRA.KUMAR1RA":{"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:20636},
+"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:20636},
+"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:20636},
+"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:20636},
+"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:20636},
+"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:20636},
+"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:20636}},
+"SANDEEP.SINGH":{"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:19029},
+"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:19029},
+"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:19029},
+"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:19029},
+"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:19029},
+"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:19029},
+"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:19029}},
+"RAJEEV.KUMAR":{"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:12179},
+"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:12179},
+"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:12179},
+"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:12179}},
+"SUNIL.LUHAR":{"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:10843},
+"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:10843},
+"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:10843},
+"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:10843},
+"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:10843},
+"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:10843},
+"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:10843}},
+"DIVYA.SINGHRA":{"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:7800},
+"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:7800},
+"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:7800},
+"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:7800},
+"2025-02": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:7800}},
+"SALONI.SINHA":{"2025-03": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:54258},
+"2025-03": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:54258},
+"2025-03": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:54258}},
+"ABHISHEK.KUMARRA":{"2025-03": { total:7, cancelled:6, marketing:0, infra:0, revenue:0,salary:45465},
+"2025-03": { total:7, cancelled:6, marketing:0, infra:0, revenue:0,salary:45465},
+"2025-03": { total:7, cancelled:6, marketing:0, infra:0, revenue:0,salary:45465}},
+"ROHIL.BHARGAV":{"2025-03": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:23710},
+"2025-03": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:23710},
+"2025-03": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:23710},
+"2025-03": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:23710},
+"2025-03": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:23710}},
+"RITIK.RA":{"2025-03": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:15626},
+"2025-03": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:15626},
+"2025-03": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:15626},
+"2025-03": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:15626},
+"2025-03": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:15626},
+"2025-03": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:15626}},
+"LAXMI.YADAV":{"2025-03": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:14000},
+"2025-03": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:14000},
+"2025-03": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:14000},
+"2025-03": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:14000},
+"2025-03": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:14000},
+"2025-03": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:14000}},
+"RAHUL.SHARMARA1":{"2025-03": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:16258},
+"2025-03": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:16258},
+"2025-03": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:16258},
+"2025-03": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:16258}},
+"SAURAV.DEY":{"2025-04": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:35380},
+"2025-04": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:35380},
+"2025-04": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:35380},
+"2025-04": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:35380},
+"2025-04": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:35380}},
+"SANJEEV.KUMAR":{"2025-04": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:22233},
+"2025-04": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:22233},
+"2025-04": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:22233},
+"2025-04": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:22233},
+"2025-04": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:22233}},
+"SALONI.KUMARI":{"2025-04": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:23200},
+"2025-04": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:23200},
+"2025-04": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:23200},
+"2025-04": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:23200},
+"2025-04": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:23200}},
+"PRINCE.GUPTA":{"2025-04": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:57193},
+"2025-04": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:57193},
+"2025-04": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:57193},
+"2025-04": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:57193},
+"2025-04": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:57193}},
+"AYUSHI.RA":{"2025-05": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:5342}},
+"CHIRAG.DHULIA":{"2025-06": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:4667},
+"2025-06": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:4667}},
+"ANUJ.KUMAR1RA":{"2025-06": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:32293},
+"2025-06": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:32293},
+"2025-06": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:32293}},
+"SIMRAN.RA":{"2025-06": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:18200},
+"2025-06": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:18200},
+"2025-06": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:18200}},
+"MOHIT.GAUR":{"2025-06": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:9493}},
+"ASHA.JOSHI":{"2025-06": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:8167},
+"2025-06": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:8167},
+"2025-06": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:8167}},
+"TANYA.YADAV":{"2025-06": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:5367},
+"2025-06": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:5367}},
+"RUDRA.VERMA":{"2025-06": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:8400},
+"2025-06": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:8400},
+"2025-06": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:8400}},
+"VAIBHAV.PUNDIR":{"2025-06": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:1833},
+"2025-06": { total:0, cancelled:0, marketing:0, infra:0, revenue:0,salary:1833}}
+    };
+
+    const salesFOS = {
+      "ABHAY.YADAV":[{date:"2023-04-29",project:"SIKKA MALL OF NOIDA",client:"KRISHNA KUMAR SINGH",unit:"226B",status:"CONFIRMED",revenue:324000},
+{date:"2023-04-30",project:"SIKKA MALL OF NOIDA",client:"HIMANGSHU SHEKHAR",unit:"290A",status:"CONFIRMED",revenue:324000},
+{date:"2024-04-07",project:"GAUR AERO MALL",client:"PRAMOD KUMAR ATTRI & VIRSHANK ATTRI",unit:"FF-103A",status:"CONFIRMED",revenue:255684},
+{date:"2023-08-12",project:"RUNWAY HUB",client:"KISHORE KUNAL & SAURAV SUMAN",unit:"LGF-57",status:"CONFIRMED",revenue:501962},
+{date:"2025-01-11",project:"MIGSUN DELTA STREET",client:"SAURAV SEN",unit:"LG-23",status:"CANCELLED",revenue:0},
+{date:"2025-01-11",project:"MALL OF EXPRESSWAY",client:"SAURAV SEN",unit:"GF-225",status:"CANCELLED",revenue:0},
+{date:"2025-01-11",project:"MALL OF EXPRESSWAY",client:"SAURAV SEN",unit:"GF-224",status:"CANCELLED",revenue:0},
+{date:"2025-01-11",project:"MALL OF EXPRESSWAY",client:"SAURAV SEN",unit:"GF-224",status:"CONFIRMED",revenue:900000},
+{date:"2025-01-11",project:"MIGSUN DELTA STREET",client:"SAURAV SEN",unit:"LGF-23",status:"CANCELLED",revenue:0},
+{date:"2025-01-15",project:"MIGSUN DELTA STREET",client:"SAURAV SEN /NEHA RAMZAI",unit:"LGF-23",status:"CONFIRMED",revenue:204660},
+{date:"2023-07-06",project:"NIA HIGH STREET",client:"PARVESH KUMAR & SONI GABA",unit:"NB SHOP-72",status:"CONFIRMED",revenue:124200},
+{date:"2024-07-09",project:"LUCKNOW CENTRAL (R)",client:"NAVNEET BASSAN",unit:"MLC-A-SF096",status:"CONFIRMED",revenue:280660},
+{date:"2024-03-16",project:"GAUR AERO MALL",client:"AAYUSH SHRIVASTAVA, SEEMA & KARUNESH BAHADUR SHRIVASTAVA",unit:"GF-287",status:"CANCELLED",revenue:0},
+{date:"2024-05-15",project:"LUCKNOW CENTRAL",client:"RAJEEV MALIK",unit:"STUDIO",status:"CANCELLED",revenue:0},
+{date:"2023-10-15",project:"SIKKA MALL OF NOIDA",client:"KRISHNA KUMAR SINGH",unit:"1401",status:"CANCELLED",revenue:0}],
+"ACHYUTAM.ANAND":[{date:"2025-03-23",project:"PROVINCE D OLYMPIA-PLOT",client:"ANIL KUMAR JOHRI",unit:"E-014",status:"CONFIRMED",revenue:360000}],
+"YASH.MEHROTRA":[{date:"2024-08-25",project:"SIKKA KAAMYA GREENS",client:"GAURAV KUMAR",unit:"PEARL 404",status:"CONFIRMED",revenue:692000}],
+"SURBHI.RA":[{date:"2024-11-24",project:"MIGSUN DELTA STREET",client:"Javed Ahamed",unit:"LG-74",status:"CONFIRMED",revenue:-32000},
+{date:"2024-09-22",project:"133 AVENUE",client:"NEELOFAR & JAVED AHAMAD",unit:"LGF-54A",status:"CONFIRMED",revenue:651600}],
+"NISHA.RA1":[{date:"2024-12-01",project:"MIGSUN DELTA STREET",client:"ANKIT GAUR",unit:"SA-409",status:"CANCELLED",revenue:0},
+{date:"2024-12-01",project:"MIGSUN DELTA STREET",client:"ANKIT GAUR / NIRMALA",unit:"LG-21",status:"CANCELLED",revenue:0},
+{date:"2024-12-21",project:"MIGSUN DELTA STREET",client:"PRADEEP KUMAR",unit:"LG-06",status:"CANCELLED",revenue:0}],
+"MUKESH.KUMAR":[{date:"2025-02-15",project:"MIGSUN DELTA STREET",client:"SURESH PAL",unit:"LGF-83",status:"CANCELLED",revenue:0},
+{date:"2025-02-15",project:"MIGSUN DELTA STREET",client:"SURESH PAL",unit:"LGF-83",status:"CANCELLED",revenue:0},
+{date:"2025-02-15",project:"MIGSUN DELTA STREET",client:"SURESH PAL",unit:"LGF-83",status:"CANCELLED",revenue:0}],
+"SUNIL.LUHAR":[{date:"2025-03-28",project:"PURVANCHAL YAMUNA EXPRESSWAY",client:"SHOBHIT GARG",unit:"UNIT NO. TOWER-5, A4/1507",status:"CONFIRMED",revenue:347440},
+{date:"2025-03-30",project:"PURVANCHAL YAMUNA EXPRESSWAY",client:"RAJAT GARG",unit:"UNIT NO. TOWER-5, A4/1107",status:"CONFIRMED",revenue:347440}],
+"ABHISHEK.KUMARRA":[{date:"2025-03-09",project:"PURVANCHAL YAMUNA EXPRESSWAY",client:"RAMA GUPTA",unit:"1",status:"NOT CONFIRMED",revenue:0},
+{date:"2025-03-09",project:"PRESTIGE SIDDHARTH VIHAR",client:"RAMA GUPTA",unit:"1",status:"CANCELLED",revenue:0},
+{date:"2025-03-10",project:"PRESTIGE SIDDHARTH VIHAR",client:"NAND KISHOR",unit:"1",status:"CANCELLED",revenue:0},
+{date:"2025-03-09",project:"PRESTIGE SIDDHARTH VIHAR",client:"RAKESH KUMAR",unit:"2",status:"CANCELLED",revenue:0},
+{date:"2025-03-09",project:"PRESTIGE SIDDHARTH VIHAR",client:"RAMA GUPTA",unit:"NA",status:"CANCELLED",revenue:0},
+{date:"2025-03-09",project:"PRESTIGE SIDDHARTH VIHAR",client:"LALAN KUMAR",unit:"NA",status:"CANCELLED",revenue:0},
+{date:"2025-03-09",project:"PRESTIGE SIDDHARTH VIHAR",client:"LALAN KUMAR",unit:"NA",status:"CANCELLED",revenue:0}]
+    };
+
+    const matrixFOS = {
+      "AASHIKA.GUPTA":{"2025-02":{calls:3709,connected:1073,duration:562,svSched:0,svDone:0,mtgSched:2,mtgDone:50,dailyWork:3630},
+"2025-03":{calls:3183,connected:1014,duration:616,svSched:0,svDone:1,mtgSched:26,mtgDone:50,dailyWork:2849},
+"2025-04":{calls:2218,connected:597,duration:396,svSched:2,svDone:2,mtgSched:22,mtgDone:52,dailyWork:1607},
+"2025-05":{calls:2176,connected:685,duration:411,svSched:0,svDone:0,mtgSched:57,mtgDone:52,dailyWork:1719},
+"2025-06":{calls:2081,connected:629,duration:410,svSched:0,svDone:0,mtgSched:66,mtgDone:52,dailyWork:1205},
+"2025-07":{calls:2068,connected:800,duration:580,svSched:1,svDone:2,mtgSched:47,mtgDone:56,dailyWork:1796}},
+"ABHAY.AHLAWAT":{"2025-02":{calls:2078,connected:725,duration:301,svSched:0,svDone:0,mtgSched:1,mtgDone:50,dailyWork:2794},
+"2025-03":{calls:947,connected:341,duration:145,svSched:0,svDone:0,mtgSched:3,mtgDone:50,dailyWork:2593},
+"2025-04":{calls:237,connected:89,duration:42,svSched:1,svDone:1,mtgSched:5,mtgDone:51,dailyWork:2602},
+"2025-05":{calls:8,connected:7,duration:1,svSched:0,svDone:0,mtgSched:9,mtgDone:50,dailyWork:963}},
+"ABHAY.YADAV":{"2023-03":{calls:5011,connected:1473,duration:848,svSched:1,svDone:0,mtgSched:8,mtgDone:51,dailyWork:4599},
+"2023-04":{calls:4621,connected:1390,duration:783,svSched:4,svDone:3,mtgSched:3,mtgDone:53,dailyWork:4281},
+"2023-05":{calls:3081,connected:904,duration:598,svSched:7,svDone:4,mtgSched:1,mtgDone:50,dailyWork:2968},
+"2023-06":{calls:1506,connected:448,duration:383,svSched:5,svDone:4,mtgSched:1,mtgDone:50,dailyWork:1531},
+"2023-07":{calls:4166,connected:1114,duration:652,svSched:7,svDone:4,mtgSched:2,mtgDone:51,dailyWork:3912},
+"2023-08":{calls:2897,connected:713,duration:327,svSched:6,svDone:3,mtgSched:0,mtgDone:50,dailyWork:2004},
+"2023-09":{calls:27,connected:10,duration:8,svSched:1,svDone:0,mtgSched:0,mtgDone:50,dailyWork:19},
+"2023-10":{calls:4196,connected:999,duration:412,svSched:2,svDone:0,mtgSched:1,mtgDone:51,dailyWork:3040},
+"2023-11":{calls:5689,connected:1449,duration:777,svSched:9,svDone:3,mtgSched:1,mtgDone:50,dailyWork:4196},
+"2023-12":{calls:2973,connected:877,duration:671,svSched:44,svDone:14,mtgSched:0,mtgDone:50,dailyWork:2215},
+"2024-01":{calls:3554,connected:929,duration:779,svSched:24,svDone:4,mtgSched:0,mtgDone:50,dailyWork:2691},
+"2024-02":{calls:3162,connected:914,duration:660,svSched:14,svDone:4,mtgSched:18,mtgDone:53,dailyWork:2117},
+"2024-03":{calls:2317,connected:651,duration:510,svSched:22,svDone:13,mtgSched:3,mtgDone:553,dailyWork:1893},
+"2024-04":{calls:2608,connected:671,duration:493,svSched:26,svDone:7,mtgSched:1,mtgDone:567,dailyWork:2256},
+"2024-05":{calls:1971,connected:696,duration:485,svSched:20,svDone:8,mtgSched:1,mtgDone:57,dailyWork:1684},
+"2024-06":{calls:3915,connected:1269,duration:28,svSched:12,svDone:8,mtgSched:4,mtgDone:51,dailyWork:2744},
+"2024-07":{calls:1650,connected:446,duration:283,svSched:16,svDone:6,mtgSched:4,mtgDone:521,dailyWork:2274},
+"2024-08":{calls:1554,connected:453,duration:275,svSched:4,svDone:11,mtgSched:32,mtgDone:524,dailyWork:1355},
+"2024-09":{calls:1076,connected:332,duration:207,svSched:4,svDone:7,mtgSched:11,mtgDone:53,dailyWork:1646},
+"2024-10":{calls:472,connected:156,duration:126,svSched:3,svDone:8,mtgSched:22,mtgDone:511,dailyWork:1217},
+"2024-11":{calls:2173,connected:732,duration:539,svSched:8,svDone:2,mtgSched:26,mtgDone:52,dailyWork:3212},
+"2024-12":{calls:1942,connected:596,duration:366,svSched:3,svDone:1,mtgSched:33,mtgDone:58,dailyWork:3814},
+"2025-01":{calls:1459,connected:433,duration:289,svSched:5,svDone:4,mtgSched:21,mtgDone:57,dailyWork:1817},
+"2025-02":{calls:1275,connected:409,duration:302,svSched:4,svDone:3,mtgSched:9,mtgDone:52,dailyWork:1829},
+"2025-03":{calls:2236,connected:801,duration:419,svSched:2,svDone:5,mtgSched:26,mtgDone:56,dailyWork:3014},
+"2025-04":{calls:1498,connected:478,duration:353,svSched:3,svDone:0,mtgSched:27,mtgDone:57,dailyWork:2295},
+"2025-05":{calls:14,connected:13,duration:4,svSched:0,svDone:0,mtgSched:4,mtgDone:51,dailyWork:4},
+"2025-06":{calls:1141,connected:419,duration:235,svSched:1,svDone:0,mtgSched:69,mtgDone:54,dailyWork:1706},
+"2025-07":{calls:1836,connected:800,duration:579,svSched:0,svDone:1,mtgSched:36,mtgDone:59,dailyWork:1783}},
+"ABHISHEK.KUMARRA":{"2025-03":{calls:4,connected:0,duration:0,svSched:3,svDone:6,mtgSched:3,mtgDone:55,dailyWork:216}},
+"ACHYUTAM.ANAND":{"2025-02":{calls:22,connected:9,duration:13,svSched:8,svDone:2,mtgSched:23,mtgDone:53,dailyWork:2381},
+"2025-03":{calls:796,connected:306,duration:186,svSched:3,svDone:4,mtgSched:40,mtgDone:510,dailyWork:1672},
+"2025-04":{calls:1033,connected:383,duration:253,svSched:3,svDone:4,mtgSched:27,mtgDone:56,dailyWork:1791},
+"2025-05":{calls:397,connected:172,duration:154,svSched:2,svDone:2,mtgSched:101,mtgDone:59,dailyWork:1455},
+"2025-06":{calls:1260,connected:529,duration:502,svSched:0,svDone:0,mtgSched:48,mtgDone:54,dailyWork:1183},
+"2025-07":{calls:2931,connected:988,duration:919,svSched:2,svDone:2,mtgSched:55,mtgDone:53,dailyWork:3003}},
+"ANKIT.1RA":{"2025-01":{calls:6,connected:1,duration:0,svSched:0,svDone:0,mtgSched:0,mtgDone:50,dailyWork:97},
+"2025-02":{calls:17,connected:8,duration:2,svSched:0,svDone:1,mtgSched:3,mtgDone:51,dailyWork:1386},
+"2025-03":{calls:1592,connected:510,duration:258,svSched:1,svDone:1,mtgSched:7,mtgDone:50,dailyWork:2433}},
+"ANUBHAV.TIWARI":{"2025-02":{calls:5918,connected:1754,duration:741,svSched:2,svDone:1,mtgSched:10,mtgDone:52,dailyWork:5606},
+"2025-03":{calls:4709,connected:1190,duration:602,svSched:5,svDone:2,mtgSched:38,mtgDone:54,dailyWork:3415},
+"2025-04":{calls:5066,connected:1119,duration:608,svSched:7,svDone:1,mtgSched:27,mtgDone:52,dailyWork:2847},
+"2025-05":{calls:4397,connected:1134,duration:567,svSched:4,svDone:2,mtgSched:115,mtgDone:54,dailyWork:2819},
+"2025-06":{calls:3296,connected:772,duration:462,svSched:5,svDone:0,mtgSched:46,mtgDone:53,dailyWork:2530},
+"2025-07":{calls:2386,connected:657,duration:387,svSched:2,svDone:1,mtgSched:29,mtgDone:53,dailyWork:1797}},
+"ANUJ.KUMAR1RA":{"2025-06":{calls:1918,connected:726,duration:312,svSched:0,svDone:1,mtgSched:19,mtgDone:51,dailyWork:1329},
+"2025-07":{calls:3092,connected:993,duration:493,svSched:1,svDone:1,mtgSched:26,mtgDone:54,dailyWork:2433}},
+"AREEB.AFTAB":{"2025-03":{calls:4532,connected:1212,duration:683,svSched:0,svDone:1,mtgSched:1,mtgDone:50,dailyWork:3783},
+"2025-04":{calls:4213,connected:1313,duration:567,svSched:3,svDone:1,mtgSched:11,mtgDone:50,dailyWork:3326},
+"2025-05":{calls:1927,connected:542,duration:241,svSched:2,svDone:0,mtgSched:65,mtgDone:53,dailyWork:1508},
+"2025-06":{calls:1,connected:1,duration:0,svSched:0,svDone:0,mtgSched:0,mtgDone:50,dailyWork:2}},
+"ARJUN.GUSAIN":{"2025-03":{calls:5790,connected:1457,duration:642,svSched:0,svDone:0,mtgSched:0,mtgDone:50,dailyWork:5607},
+"2025-04":{calls:5965,connected:1894,duration:962,svSched:0,svDone:0,mtgSched:3,mtgDone:50,dailyWork:5574},
+"2025-05":{calls:1956,connected:906,duration:451,svSched:0,svDone:0,mtgSched:4,mtgDone:50,dailyWork:2047}},
+"ASHA.JOSHI":{"2025-06":{calls:60,connected:11,duration:8,svSched:0,svDone:0,mtgSched:2,mtgDone:50,dailyWork:16},
+"2025-07":{calls:2724,connected:893,duration:514,svSched:0,svDone:0,mtgSched:54,mtgDone:53,dailyWork:1812}},
+"CHAKSHIKA.VASHISHET":{"2025-02":{calls:5334,connected:1504,duration:724,svSched:3,svDone:0,mtgSched:8,mtgDone:50,dailyWork:4921},
+"2025-03":{calls:3712,connected:1425,duration:753,svSched:11,svDone:2,mtgSched:18,mtgDone:51,dailyWork:3767},
+"2025-04":{calls:3717,connected:1084,duration:614,svSched:3,svDone:1,mtgSched:31,mtgDone:51,dailyWork:3317},
+"2025-05":{calls:8,connected:1,duration:0,svSched:0,svDone:0,mtgSched:13,mtgDone:51,dailyWork:270}},
+"DIGVIJAY.SINGHRA":{"2025-02":{calls:4562,connected:1172,duration:609,svSched:1,svDone:0,mtgSched:15,mtgDone:50,dailyWork:4967},
+"2025-03":{calls:1076,connected:350,duration:223,svSched:1,svDone:0,mtgSched:40,mtgDone:51,dailyWork:1649},
+"2025-04":{calls:1767,connected:674,duration:394,svSched:0,svDone:1,mtgSched:33,mtgDone:50,dailyWork:1901},
+"2025-05":{calls:290,connected:140,duration:72,svSched:0,svDone:0,mtgSched:53,mtgDone:52,dailyWork:301},
+"2025-06":{calls:891,connected:340,duration:282,svSched:0,svDone:0,mtgSched:54,mtgDone:54,dailyWork:1150},
+"2025-07":{calls:1694,connected:593,duration:424,svSched:3,svDone:3,mtgSched:40,mtgDone:53,dailyWork:1937}},
+"DIVYA.SINGHRA":{"2025-02":{calls:72,connected:21,duration:10,svSched:0,svDone:0,mtgSched:0,mtgDone:50,dailyWork:155},
+"2025-03":{calls:577,connected:224,duration:139,svSched:3,svDone:0,mtgSched:34,mtgDone:54,dailyWork:777},
+"2025-04":{calls:2279,connected:831,duration:437,svSched:1,svDone:0,mtgSched:13,mtgDone:53,dailyWork:1496},
+"2025-05":{calls:1642,connected:538,duration:241,svSched:0,svDone:0,mtgSched:85,mtgDone:513,dailyWork:1497}},
+"GANPATI.CHOUDHARY":{"2025-03":{calls:6019,connected:1596,duration:886,svSched:1,svDone:0,mtgSched:1,mtgDone:50,dailyWork:5479},
+"2025-04":{calls:4914,connected:1511,duration:1000,svSched:0,svDone:0,mtgSched:6,mtgDone:50,dailyWork:4484},
+"2025-05":{calls:837,connected:350,duration:230,svSched:0,svDone:0,mtgSched:46,mtgDone:50,dailyWork:900},
+"2025-06":{calls:824,connected:291,duration:233,svSched:0,svDone:0,mtgSched:30,mtgDone:51,dailyWork:881},
+"2025-07":{calls:1287,connected:592,duration:495,svSched:0,svDone:2,mtgSched:44,mtgDone:55,dailyWork:1285}},
+"JITENDRA.KUMAR1RA":{"2025-02":{calls:1655,connected:480,duration:252,svSched:0,svDone:0,mtgSched:18,mtgDone:50,dailyWork:2692},
+"2025-03":{calls:2029,connected:674,duration:500,svSched:0,svDone:3,mtgSched:48,mtgDone:50,dailyWork:3417},
+"2025-04":{calls:2455,connected:903,duration:656,svSched:0,svDone:0,mtgSched:32,mtgDone:52,dailyWork:2598},
+"2025-05":{calls:2306,connected:745,duration:550,svSched:0,svDone:0,mtgSched:59,mtgDone:55,dailyWork:2027},
+"2025-06":{calls:1293,connected:459,duration:353,svSched:0,svDone:0,mtgSched:56,mtgDone:53,dailyWork:1209},
+"2025-07":{calls:2029,connected:674,duration:512,svSched:0,svDone:2,mtgSched:46,mtgDone:56,dailyWork:2128}},
+"KARTIK.GARG":{"2025-02":{calls:3817,connected:1150,duration:487,svSched:4,svDone:0,mtgSched:3,mtgDone:50,dailyWork:4868},
+"2025-03":{calls:3516,connected:1194,duration:570,svSched:2,svDone:2,mtgSched:47,mtgDone:50,dailyWork:4965},
+"2025-04":{calls:3317,connected:1158,duration:583,svSched:0,svDone:0,mtgSched:19,mtgDone:52,dailyWork:2977},
+"2025-05":{calls:10,connected:10,duration:2,svSched:0,svDone:0,mtgSched:0,mtgDone:50,dailyWork:70}},
+"KIRTI.AGGARWAL":{"2025-02":{calls:3918,connected:1143,duration:515,svSched:1,svDone:1,mtgSched:7,mtgDone:51,dailyWork:4092},
+"2025-03":{calls:3133,connected:1034,duration:529,svSched:2,svDone:1,mtgSched:79,mtgDone:55,dailyWork:3796},
+"2025-04":{calls:4146,connected:1317,duration:671,svSched:1,svDone:1,mtgSched:51,mtgDone:53,dailyWork:3954},
+"2025-05":{calls:2402,connected:738,duration:421,svSched:1,svDone:1,mtgSched:131,mtgDone:514,dailyWork:2273},
+"2025-06":{calls:1774,connected:627,duration:336,svSched:1,svDone:1,mtgSched:48,mtgDone:54,dailyWork:1481},
+"2025-07":{calls:1855,connected:590,duration:439,svSched:0,svDone:0,mtgSched:61,mtgDone:53,dailyWork:2006}},
+"KONIKA.PRAJAPATI":{"2025-03":{calls:6037,connected:1852,duration:777,svSched:0,svDone:0,mtgSched:0,mtgDone:50,dailyWork:5265},
+"2025-04":{calls:5697,connected:1692,duration:674,svSched:0,svDone:0,mtgSched:3,mtgDone:50,dailyWork:5736},
+"2025-05":{calls:1078,connected:432,duration:175,svSched:1,svDone:1,mtgSched:32,mtgDone:52,dailyWork:1515}},
+"KSHITIZ.AGARWAL":{"2024-11":{calls:0,connected:0,duration:0,svSched:0,svDone:0,mtgSched:0,mtgDone:50,dailyWork:0},
+"2024-12":{calls:257,connected:105,duration:151,svSched:0,svDone:1,mtgSched:13,mtgDone:51,dailyWork:459},
+"2025-01":{calls:578,connected:214,duration:159,svSched:1,svDone:0,mtgSched:7,mtgDone:54,dailyWork:2431},
+"2025-02":{calls:102,connected:42,duration:46,svSched:5,svDone:4,mtgSched:5,mtgDone:51,dailyWork:1273},
+"2025-03":{calls:290,connected:114,duration:116,svSched:0,svDone:1,mtgSched:7,mtgDone:53,dailyWork:1702}},
+"LAXMI.YADAV":{"2025-03":{calls:221,connected:77,duration:40,svSched:2,svDone:1,mtgSched:1,mtgDone:51,dailyWork:426},
+"2025-04":{calls:679,connected:208,duration:109,svSched:0,svDone:0,mtgSched:14,mtgDone:56,dailyWork:1141},
+"2025-05":{calls:168,connected:93,duration:60,svSched:0,svDone:0,mtgSched:114,mtgDone:58,dailyWork:1150},
+"2025-06":{calls:792,connected:391,duration:279,svSched:0,svDone:0,mtgSched:91,mtgDone:54,dailyWork:976},
+"2025-07":{calls:522,connected:194,duration:173,svSched:0,svDone:0,mtgSched:47,mtgDone:57,dailyWork:1380}},
+"MRIDULA.RA":{"2025-02":{calls:3413,connected:1037,duration:594,svSched:0,svDone:0,mtgSched:2,mtgDone:50,dailyWork:4954},
+"2025-03":{calls:814,connected:264,duration:158,svSched:4,svDone:3,mtgSched:7,mtgDone:54,dailyWork:4379},
+"2025-04":{calls:438,connected:156,duration:110,svSched:1,svDone:1,mtgSched:17,mtgDone:57,dailyWork:2336},
+"2025-05":{calls:1,connected:1,duration:0,svSched:0,svDone:0,mtgSched:0,mtgDone:50,dailyWork:0}},
+"MUKESH.KUMAR":{"2025-01":{calls:158,connected:64,duration:43,svSched:0,svDone:0,mtgSched:1,mtgDone:51,dailyWork:65},
+"2025-02":{calls:233,connected:88,duration:58,svSched:3,svDone:3,mtgSched:12,mtgDone:54,dailyWork:1343},
+"2025-03":{calls:48,connected:26,duration:35,svSched:2,svDone:2,mtgSched:6,mtgDone:52,dailyWork:1713},
+"2025-04":{calls:168,connected:47,duration:83,svSched:0,svDone:1,mtgSched:2,mtgDone:50,dailyWork:696}},
+"NISHA.RA1":{"2024-08":{calls:2094,connected:651,duration:408,svSched:0,svDone:1,mtgSched:9,mtgDone:50,dailyWork:1789},
+"2024-09":{calls:1948,connected:567,duration:376,svSched:0,svDone:0,mtgSched:2,mtgDone:53,dailyWork:3414},
+"2024-10":{calls:1781,connected:499,duration:337,svSched:0,svDone:0,mtgSched:10,mtgDone:52,dailyWork:3072},
+"2024-11":{calls:1531,connected:471,duration:352,svSched:0,svDone:1,mtgSched:7,mtgDone:50,dailyWork:1665},
+"2024-12":{calls:3051,connected:864,duration:665,svSched:0,svDone:0,mtgSched:18,mtgDone:55,dailyWork:1540},
+"2025-01":{calls:3008,connected:918,duration:645,svSched:1,svDone:3,mtgSched:28,mtgDone:56,dailyWork:1821},
+"2025-02":{calls:2455,connected:665,duration:477,svSched:3,svDone:1,mtgSched:13,mtgDone:54,dailyWork:2382},
+"2025-03":{calls:2889,connected:986,duration:647,svSched:1,svDone:2,mtgSched:22,mtgDone:54,dailyWork:2249},
+"2025-04":{calls:2497,connected:766,duration:555,svSched:0,svDone:0,mtgSched:27,mtgDone:52,dailyWork:1429},
+"2025-05":{calls:2384,connected:810,duration:567,svSched:0,svDone:0,mtgSched:116,mtgDone:59,dailyWork:1428},
+"2025-06":{calls:2022,connected:630,duration:440,svSched:2,svDone:2,mtgSched:84,mtgDone:58,dailyWork:1068},
+"2025-07":{calls:2407,connected:871,duration:887,svSched:0,svDone:1,mtgSched:75,mtgDone:56,dailyWork:1706}},
+"NITISH.TIWARI":{"2025-02":{calls:5129,connected:1481,duration:647,svSched:0,svDone:0,mtgSched:14,mtgDone:50,dailyWork:5668},
+"2025-03":{calls:3749,connected:1282,duration:634,svSched:0,svDone:0,mtgSched:14,mtgDone:50,dailyWork:3701},
+"2025-04":{calls:3024,connected:985,duration:599,svSched:0,svDone:0,mtgSched:25,mtgDone:52,dailyWork:2495},
+"2025-05":{calls:501,connected:173,duration:100,svSched:0,svDone:0,mtgSched:4,mtgDone:51,dailyWork:695},
+"2025-06":{calls:2409,connected:906,duration:476,svSched:1,svDone:1,mtgSched:52,mtgDone:54,dailyWork:2308},
+"2025-07":{calls:1733,connected:607,duration:363,svSched:1,svDone:0,mtgSched:46,mtgDone:55,dailyWork:3632}},
+"PARTH.SHARMA":{"2025-02":{calls:4712,connected:1331,duration:560,svSched:5,svDone:3,mtgSched:5,mtgDone:51,dailyWork:4373},
+"2025-03":{calls:3841,connected:1330,duration:615,svSched:1,svDone:1,mtgSched:18,mtgDone:52,dailyWork:3803},
+"2025-04":{calls:4122,connected:1324,duration:678,svSched:2,svDone:1,mtgSched:27,mtgDone:53,dailyWork:3494},
+"2025-05":{calls:2135,connected:712,duration:335,svSched:10,svDone:0,mtgSched:55,mtgDone:54,dailyWork:2078},
+"2025-06":{calls:3161,connected:989,duration:425,svSched:1,svDone:0,mtgSched:38,mtgDone:51,dailyWork:2533},
+"2025-07":{calls:1163,connected:395,duration:228,svSched:0,svDone:0,mtgSched:21,mtgDone:52,dailyWork:1082}},
+"PRINCE.GUPTA":{"2025-04":{calls:2371,connected:569,duration:224,svSched:0,svDone:0,mtgSched:3,mtgDone:51,dailyWork:2085},
+"2025-05":{calls:2860,connected:837,duration:367,svSched:0,svDone:0,mtgSched:46,mtgDone:57,dailyWork:2672},
+"2025-06":{calls:3476,connected:710,duration:237,svSched:0,svDone:0,mtgSched:34,mtgDone:55,dailyWork:3252},
+"2025-07":{calls:1507,connected:342,duration:87,svSched:0,svDone:0,mtgSched:7,mtgDone:50,dailyWork:1416}},
+"PRIYANKA.KUMARI1RA":{"2025-02":{calls:2821,connected:733,duration:406,svSched:0,svDone:0,mtgSched:0,mtgDone:50,dailyWork:3755},
+"2025-03":{calls:37,connected:13,duration:3,svSched:0,svDone:0,mtgSched:2,mtgDone:53,dailyWork:3288}},
+"RAHUL.SHARMARA1":{"2025-03":{calls:290,connected:91,duration:34,svSched:0,svDone:0,mtgSched:9,mtgDone:52,dailyWork:802},
+"2025-04":{calls:1469,connected:504,duration:207,svSched:0,svDone:1,mtgSched:8,mtgDone:51,dailyWork:1646},
+"2025-05":{calls:2651,connected:822,duration:402,svSched:0,svDone:1,mtgSched:34,mtgDone:54,dailyWork:1762}},
+"RAJEEV.KUMAR":{"2025-02":{calls:707,connected:267,duration:120,svSched:0,svDone:1,mtgSched:0,mtgDone:50,dailyWork:619},
+"2025-03":{calls:1519,connected:556,duration:208,svSched:0,svDone:2,mtgSched:29,mtgDone:51,dailyWork:2192}},
+"RAKESH.RUSTAM":{"2025-01":{calls:549,connected:125,duration:60,svSched:0,svDone:0,mtgSched:1,mtgDone:52,dailyWork:123},
+"2025-02":{calls:184,connected:53,duration:29,svSched:0,svDone:0,mtgSched:17,mtgDone:54,dailyWork:2733},
+"2025-03":{calls:67,connected:28,duration:18,svSched:6,svDone:0,mtgSched:17,mtgDone:57,dailyWork:2418}},
+"RASHI.PARMAR":{"2025-02":{calls:3359,connected:888,duration:549,svSched:0,svDone:0,mtgSched:2,mtgDone:50,dailyWork:3277},
+"2025-03":{calls:3622,connected:1208,duration:656,svSched:0,svDone:0,mtgSched:22,mtgDone:51,dailyWork:3804},
+"2025-04":{calls:3256,connected:931,duration:502,svSched:2,svDone:1,mtgSched:9,mtgDone:51,dailyWork:3278},
+"2025-05":{calls:319,connected:106,duration:51,svSched:0,svDone:0,mtgSched:7,mtgDone:50,dailyWork:272},
+"2025-06":{calls:1495,connected:368,duration:184,svSched:0,svDone:0,mtgSched:44,mtgDone:53,dailyWork:1373}},
+"RITIK.RA":{"2025-03":{calls:328,connected:175,duration:97,svSched:1,svDone:1,mtgSched:0,mtgDone:50,dailyWork:399},
+"2025-04":{calls:1058,connected:402,duration:217,svSched:0,svDone:0,mtgSched:18,mtgDone:54,dailyWork:1615},
+"2025-05":{calls:5,connected:4,duration:0,svSched:0,svDone:0,mtgSched:146,mtgDone:510,dailyWork:1303},
+"2025-06":{calls:124,connected:28,duration:16,svSched:0,svDone:0,mtgSched:73,mtgDone:54,dailyWork:1747},
+"2025-07":{calls:162,connected:92,duration:110,svSched:0,svDone:0,mtgSched:54,mtgDone:54,dailyWork:1704}},
+"RIYA.BAINS":{"2025-03":{calls:4154,connected:1108,duration:524,svSched:0,svDone:0,mtgSched:0,mtgDone:50,dailyWork:3892},
+"2025-04":{calls:4304,connected:1253,duration:652,svSched:0,svDone:0,mtgSched:16,mtgDone:50,dailyWork:3687},
+"2025-05":{calls:795,connected:328,duration:170,svSched:0,svDone:0,mtgSched:2,mtgDone:50,dailyWork:794}},
+"ROHIL.BHARGAV":{"2025-03":{calls:241,connected:91,duration:47,svSched:0,svDone:1,mtgSched:2,mtgDone:52,dailyWork:499},
+"2025-04":{calls:659,connected:199,duration:96,svSched:0,svDone:1,mtgSched:9,mtgDone:55,dailyWork:1307},
+"2025-05":{calls:9,connected:2,duration:0,svSched:0,svDone:1,mtgSched:69,mtgDone:513,dailyWork:878},
+"2025-06":{calls:1016,connected:350,duration:156,svSched:0,svDone:0,mtgSched:40,mtgDone:51,dailyWork:1132}},
+"RUDRA.VERMA":{"2025-06":{calls:148,connected:40,duration:20,svSched:0,svDone:0,mtgSched:0,mtgDone:50,dailyWork:115}},
+"SALONI.KUMARI":{"2025-04":{calls:1347,connected:456,duration:214,svSched:0,svDone:0,mtgSched:27,mtgDone:50,dailyWork:803},
+"2025-05":{calls:1460,connected:465,duration:248,svSched:1,svDone:0,mtgSched:72,mtgDone:55,dailyWork:795},
+"2025-06":{calls:1628,connected:539,duration:382,svSched:0,svDone:1,mtgSched:61,mtgDone:53,dailyWork:784},
+"2025-07":{calls:328,connected:77,duration:57,svSched:1,svDone:3,mtgSched:34,mtgDone:54,dailyWork:478}},
+"SALONI.SINHA":{"2025-03":{calls:485,connected:151,duration:98,svSched:0,svDone:0,mtgSched:0,mtgDone:50,dailyWork:1208}},
+"SANDEEP.SINGH":{"2025-02":{calls:2328,connected:660,duration:259,svSched:0,svDone:0,mtgSched:1,mtgDone:50,dailyWork:1565},
+"2025-03":{calls:3527,connected:1242,duration:511,svSched:0,svDone:0,mtgSched:1,mtgDone:50,dailyWork:3593},
+"2025-04":{calls:2974,connected:844,duration:423,svSched:0,svDone:1,mtgSched:11,mtgDone:52,dailyWork:2677},
+"2025-05":{calls:2220,connected:726,duration:328,svSched:1,svDone:0,mtgSched:62,mtgDone:54,dailyWork:1975},
+"2025-06":{calls:2873,connected:875,duration:410,svSched:0,svDone:0,mtgSched:30,mtgDone:51,dailyWork:2243},
+"2025-07":{calls:3214,connected:1053,duration:659,svSched:1,svDone:0,mtgSched:39,mtgDone:53,dailyWork:2282}},
+"SANJEEV.KUMAR":{"2025-04":{calls:2630,connected:660,duration:247,svSched:2,svDone:0,mtgSched:18,mtgDone:52,dailyWork:1698},
+"2025-05":{calls:2284,connected:600,duration:207,svSched:0,svDone:0,mtgSched:73,mtgDone:54,dailyWork:2393},
+"2025-06":{calls:2226,connected:724,duration:257,svSched:0,svDone:0,mtgSched:42,mtgDone:55,dailyWork:3101},
+"2025-07":{calls:2533,connected:901,duration:414,svSched:0,svDone:0,mtgSched:29,mtgDone:52,dailyWork:2240}},
+"SAUMYA.KUMARI":{"2025-02":{calls:4955,connected:1350,duration:882,svSched:4,svDone:0,mtgSched:2,mtgDone:50,dailyWork:4425},
+"2025-03":{calls:4141,connected:1402,duration:813,svSched:3,svDone:0,mtgSched:13,mtgDone:50,dailyWork:3953},
+"2025-04":{calls:3997,connected:1169,duration:692,svSched:0,svDone:0,mtgSched:14,mtgDone:50,dailyWork:3381},
+"2025-05":{calls:3318,connected:1112,duration:529,svSched:3,svDone:0,mtgSched:27,mtgDone:50,dailyWork:1987},
+"2025-06":{calls:2249,connected:661,duration:285,svSched:3,svDone:0,mtgSched:27,mtgDone:50,dailyWork:1767},
+"2025-07":{calls:1609,connected:515,duration:206,svSched:0,svDone:0,mtgSched:21,mtgDone:51,dailyWork:1086}},
+"SAURAV.DEY":{"2025-04":{calls:721,connected:259,duration:142,svSched:1,svDone:1,mtgSched:12,mtgDone:50,dailyWork:524},
+"2025-05":{calls:1063,connected:349,duration:188,svSched:0,svDone:0,mtgSched:107,mtgDone:52,dailyWork:1146},
+"2025-06":{calls:645,connected:221,duration:135,svSched:0,svDone:0,mtgSched:25,mtgDone:52,dailyWork:391},
+"2025-07":{calls:722,connected:357,duration:266,svSched:0,svDone:0,mtgSched:28,mtgDone:52,dailyWork:429}},
+"SIMRAN.RA":{"2025-06":{calls:1130,connected:437,duration:238,svSched:0,svDone:0,mtgSched:3,mtgDone:50,dailyWork:219},
+"2025-07":{calls:1896,connected:682,duration:441,svSched:0,svDone:0,mtgSched:12,mtgDone:52,dailyWork:725}},
+"SUNIL.LUHAR":{"2025-02":{calls:1089,connected:354,duration:174,svSched:0,svDone:0,mtgSched:7,mtgDone:50,dailyWork:667},
+"2025-03":{calls:2500,connected:664,duration:304,svSched:0,svDone:0,mtgSched:11,mtgDone:54,dailyWork:1620},
+"2025-04":{calls:2187,connected:602,duration:316,svSched:0,svDone:0,mtgSched:14,mtgDone:51,dailyWork:1375},
+"2025-05":{calls:2186,connected:814,duration:378,svSched:0,svDone:0,mtgSched:48,mtgDone:53,dailyWork:1261},
+"2025-06":{calls:1583,connected:513,duration:235,svSched:0,svDone:0,mtgSched:29,mtgDone:55,dailyWork:850},
+"2025-07":{calls:1392,connected:443,duration:283,svSched:0,svDone:0,mtgSched:28,mtgDone:52,dailyWork:827}},
+"SURBHI.RA":{"2024-07":{calls:1687,connected:459,duration:277,svSched:0,svDone:0,mtgSched:0,mtgDone:53,dailyWork:1086},
+"2024-08":{calls:3793,connected:1276,duration:799,svSched:1,svDone:1,mtgSched:70,mtgDone:54,dailyWork:2591},
+"2024-09":{calls:719,connected:184,duration:122,svSched:0,svDone:1,mtgSched:4,mtgDone:52,dailyWork:978},
+"2024-10":{calls:966,connected:285,duration:160,svSched:0,svDone:1,mtgSched:37,mtgDone:54,dailyWork:1360},
+"2024-11":{calls:1030,connected:299,duration:179,svSched:1,svDone:2,mtgSched:9,mtgDone:52,dailyWork:1206},
+"2024-12":{calls:1835,connected:540,duration:270,svSched:1,svDone:1,mtgSched:38,mtgDone:53,dailyWork:1275},
+"2025-01":{calls:1203,connected:349,duration:188,svSched:1,svDone:1,mtgSched:27,mtgDone:55,dailyWork:1227},
+"2025-02":{calls:265,connected:71,duration:61,svSched:2,svDone:5,mtgSched:23,mtgDone:59,dailyWork:1483},
+"2025-03":{calls:783,connected:282,duration:134,svSched:5,svDone:3,mtgSched:24,mtgDone:54,dailyWork:1315},
+"2025-04":{calls:601,connected:191,duration:142,svSched:1,svDone:0,mtgSched:5,mtgDone:52,dailyWork:978},
+"2025-05":{calls:1366,connected:458,duration:256,svSched:0,svDone:0,mtgSched:99,mtgDone:56,dailyWork:1120},
+"2025-06":{calls:401,connected:133,duration:92,svSched:0,svDone:0,mtgSched:32,mtgDone:51,dailyWork:275},
+"2025-07":{calls:1050,connected:399,duration:235,svSched:5,svDone:0,mtgSched:56,mtgDone:58,dailyWork:1321}},
+"SWAYAM.MOHANTY":{"2025-03":{calls:3970,connected:1108,duration:512,svSched:0,svDone:0,mtgSched:0,mtgDone:50,dailyWork:3802},
+"2025-04":{calls:4373,connected:1068,duration:546,svSched:0,svDone:0,mtgSched:9,mtgDone:51,dailyWork:3498},
+"2025-05":{calls:2177,connected:652,duration:350,svSched:0,svDone:0,mtgSched:39,mtgDone:50,dailyWork:951},
+"2025-06":{calls:2648,connected:507,duration:204,svSched:0,svDone:0,mtgSched:38,mtgDone:51,dailyWork:861}},
+"TANYA.YADAV":{"2025-06":{calls:0,connected:0,duration:0,svSched:0,svDone:0,mtgSched:0,mtgDone:50,dailyWork:0}},
+"VAIBHAV.NITWAL":{"2025-02":{calls:4025,connected:1042,duration:463,svSched:0,svDone:0,mtgSched:2,mtgDone:50,dailyWork:4028},
+"2025-03":{calls:2499,connected:658,duration:307,svSched:0,svDone:0,mtgSched:69,mtgDone:54,dailyWork:3253},
+"2025-04":{calls:2200,connected:660,duration:380,svSched:0,svDone:0,mtgSched:31,mtgDone:54,dailyWork:1872},
+"2025-05":{calls:9,connected:9,duration:2,svSched:0,svDone:0,mtgSched:0,mtgDone:50,dailyWork:1}},
+"VANSH.TANEJA":{"2025-02":{calls:4023,connected:1106,duration:561,svSched:0,svDone:0,mtgSched:3,mtgDone:50,dailyWork:3802},
+"2025-03":{calls:3338,connected:962,duration:415,svSched:2,svDone:0,mtgSched:16,mtgDone:50,dailyWork:2983},
+"2025-04":{calls:1734,connected:453,duration:252,svSched:1,svDone:0,mtgSched:14,mtgDone:56,dailyWork:1689},
+"2025-05":{calls:15,connected:11,duration:4,svSched:0,svDone:0,mtgSched:2,mtgDone:50,dailyWork:16}},
+"YASH.MEHROTRA":{"2025-02":{calls:7,connected:3,duration:3,svSched:3,svDone:1,mtgSched:14,mtgDone:53,dailyWork:1562},
+"2025-03":{calls:290,connected:120,duration:134,svSched:2,svDone:3,mtgSched:16,mtgDone:58,dailyWork:1517}}
+
+    };
+
+    /* ===== Elements ===== */
+    const roleSel     = document.getElementById('role');
+    const searchInput = document.getElementById('search');
+    const acList      = document.getElementById('ac-list');
+    const resetBtn    = document.getElementById('resetFilters');
+
+    const dCity   = document.getElementById('dCity');
+    const dStatus = document.getElementById('dStatus');
+    const dDOJ    = document.getElementById('dDOJ');
+    const dDOL    = document.getElementById('dDOL');
+    const dCode   = document.getElementById('dCode');
+    const dSalary = document.getElementById('dSalary');
+    const dolLabel= document.getElementById('dolLabel');
+
+    const fosSection = document.getElementById('fosTableSection');
+    const fosTbody   = document.getElementById('fosTbody');
+
+    const fosSalesSection = document.getElementById('fosSalesSection');
+    const fosSalesBody    = document.getElementById('fosSalesBody');
+
+    const fosMatrixSection = document.getElementById('fosMatrixSection');
+    const fosMatrixBody    = document.getElementById('fosMatrixBody');
+
+    let state = { role: roleSel.value, name: null };
+    let acIndex = -1;
+    let salesSort = { key: null, asc: true };
+
+    /* ===== Helpers ===== */
+    const fmtDate = (iso)=> !iso ? '—' : new Date(iso+"T00:00:00").toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
+    const fmtINR  = (n)=> n==null ? '—' : n.toLocaleString('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:0});
+    const fmtX    = (x)=> isFinite(x) ? (Math.round(x*100)/100).toFixed(2) + '×' : '—';
+
+    function namesForRole(role){ return Object.keys(employees[role] || []); }
+    function filterNames(q){ const list = namesForRole(state.role); if(!q) return list; q=q.toLowerCase(); return list.filter(n=>n.toLowerCase().includes(q)); }
+
+    function monthRange(doj, dol){
+      const start = new Date(doj.slice(0,7)+"-01T00:00:00");
+      const end = dol ? new Date(dol.slice(0,7)+"-01T00:00:00") : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+      const arr = []; const d = new Date(start);
+      while(d <= end){
+        const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,'0');
+        arr.push({ key: `${y}-${m}`, label: d.toLocaleString('en-IN',{month:'short', year:'numeric'}) });
+        d.setMonth(d.getMonth()+1);
+      }
+      return arr;
+    }
+
+    /* ===== Autocomplete ===== */
+    function openAC(items){
+      acList.innerHTML = items.length
+        ? items.map((n,i)=>`<div class="ac-item${i===0?' active':''}" role="option">${n}</div>`).join('')
+        : `<div class="ac-empty">No names found</div>`;
+      acList.classList.add('open'); searchInput.setAttribute('aria-expanded','true'); acIndex = items.length?0:-1;
+      [...acList.querySelectorAll('.ac-item')].forEach(el=>{
+        el.addEventListener('mousedown', (e)=>{ e.preventDefault(); selectName(el.textContent.trim()); });
+      });
+    }
+    function closeAC(){ acList.classList.remove('open'); searchInput.setAttribute('aria-expanded','false'); acIndex=-1; }
+    function refreshAC(){ openAC(filterNames(searchInput.value.trim())); }
+    function moveActive(delta){
+      const items = [...acList.querySelectorAll('.ac-item')]; if(!items.length) return;
+      acIndex = (acIndex + delta + items.length) % items.length;
+      items.forEach(el=>el.classList.remove('active')); items[acIndex].classList.add('active'); items[acIndex].scrollIntoView({block:'nearest'});
+    }
+    function selectActive(){ const el = acList.querySelectorAll('.ac-item')[acIndex]; if(el) selectName(el.textContent.trim()); }
+
+    /* ===== Selection + details ===== */
+    function selectName(name){
+      state.name = name; searchInput.value = name; closeAC();
+      updateDetails(); renderFOSTable(); renderFOSSalesTable(); renderFOSMatrixTable();
+    }
+
+    function updateDetails(){
+      const data = (employees[state.role] || {})[state.name || ''] || null;
+      if(!data){
+        dCity.textContent='—'; dStatus.textContent='—'; dStatus.className='';
+        dDOJ.textContent='—'; dDOL.textContent='—'; dCode.textContent='—'; dSalary.textContent='—';
+        dolLabel.style.display='none'; dDOL.style.display='none'; return;
+      }
+      dCity.textContent = data.city || '—';
+      dStatus.textContent = data.status || '—';
+      dStatus.className = 'badge ' + (data.status === 'Active' ? 'ok' : 'err');
+      dDOJ.textContent = fmtDate(data.doj);
+      if(String(data.status).toLowerCase()==='inactive' && data.dol){
+        dolLabel.style.display=''; dDOL.style.display=''; dDOL.textContent = fmtDate(data.dol);
+      } else { dolLabel.style.display='none'; dDOL.style.display='none'; dDOL.textContent='—'; }
+      dCode.textContent = data.code || '—';
+      dSalary.textContent = fmtINR(data.salary);
+    }
+
+    /* ===== 1) Monthly Performance (FOS) ===== */
+    function renderFOSTable(){
+  if(state.role !== 'FOS' || !state.name){
+    fosSection.style.display = 'none'; fosTbody.innerHTML = ''; return;
+  }
+  const emp = employees['FOS'][state.name];
+  if(!emp){ fosSection.style.display = 'none'; return; }
+
+  const months = monthRange(emp.doj, emp.dol);
+  const monthly = (perfFOS[state.name] || {});
+  
+  let sumTotal=0, sumCancel=0, sumActive=0, sumMkt=0, sumInfra=0, sumRevenue=0, sumSalary=0, sumTarget=0;
+
+  months.forEach(m=>{
+    const r = monthly[m.key] || { total:0, cancelled:0, marketing:0, infra:0, revenue:0, salary:0 };
+    const salary = r.salary || 0;
+    const active = Math.max((r.total||0) - (r.cancelled||0), 0);
+    const target = salary * 5;
+
+    sumTotal += (r.total||0);
+    sumCancel+= (r.cancelled||0);
+    sumActive+= active;
+    sumMkt   += (r.marketing||0);
+    sumInfra += (r.infra||0);
+    sumRevenue += (r.revenue||0);
+    sumSalary += salary;
+    sumTarget += target;
+  });
+
+  const xAchievedTotal = sumTarget ? (sumRevenue / sumTarget) : 0;
+  const surplusTotal = sumRevenue - sumTarget;
+
+  const totalsRow = `
+    <tr class="totals-row">
+      <td>Total</td>
+      <td class="num">${sumTotal}</td>
+      <td class="num">${sumCancel}</td>
+      <td class="num">${sumActive}</td>
+      <td class="num">${fmtINR(sumSalary)}</td>
+      <td class="num">${fmtINR(sumMkt)}</td>
+      <td class="num">${fmtINR(sumInfra)}</td>
+      <td class="num">${fmtINR(sumRevenue)}</td>
+      <td class="num">${fmtINR(sumTarget)}</td>
+      <td class="num">${fmtX(xAchievedTotal)}</td>
+      <td class="num ${surplusTotal>=0?'surplus':'deficit'}">${surplusTotal>=0?'+':''}${fmtINR(Math.abs(surplusTotal))}</td>
+    </tr>`;
+
+  const monthRows = months.map(m=>{
+    const r = monthly[m.key] || { total:0, cancelled:0, marketing:0, infra:0, revenue:0, salary:0 };
+    const activeUnits = Math.max((r.total||0) - (r.cancelled||0), 0);
+    const salary = r.salary || 0;
+    const target = salary * 5;
+    const xFactor = target ? ((r.revenue||0)/target) : 0;
+    const surplus = (r.revenue||0) - target;
+
+    return `<tr>
+      <td>${m.label}</td>
+      <td class="num">${r.total||0}</td>
+      <td class="num">${r.cancelled||0}</td>
+      <td class="num">${activeUnits}</td>
+      <td class="num">${fmtINR(salary)}</td>
+      <td class="num">${fmtINR(r.marketing||0)}</td>
+      <td class="num">${fmtINR(r.infra||0)}</td>
+      <td class="num">${fmtINR(r.revenue||0)}</td>
+      <td class="num">${fmtINR(target)}</td>
+      <td class="num">${fmtX(xFactor)}</td>
+      <td class="num ${surplus>=0?'surplus':'deficit'}">${surplus>=0?'+':''}${fmtINR(Math.abs(surplus))}</td>
+    </tr>`;
+  }).join('');
+
+  fosTbody.innerHTML = totalsRow + monthRows;
+  fosSection.style.display = 'block';
+}
+
+
+    /* ===== 2) Sales (sortable) ===== */
+    function flagFromStatus(status){ return status === 'Cancelled' ? 0 : 1; }
+    function getSortableVal(row, key){
+      switch(key){
+        case 'date':    return new Date(row.date).getTime();
+        case 'revenue': return Number(row.revenue) || 0;
+        case 'flag':    return flagFromStatus(row.status);
+        case 'status':  return String(row.status || '').toLowerCase();
+        case 'project': return String(row.project || '').toLowerCase();
+        case 'client':  return String(row.client || '').toLowerCase();
+        case 'unit':    return String(row.unit || '').toLowerCase();
+        default:        return '';
+      }
+    }
+    function sortSales(data, key, asc){
+      return [...data].sort((a,b)=>{
+        const x = getSortableVal(a, key);
+        const y = getSortableVal(b, key);
+        if(x === y) return 0;
+        return asc ? (x > y ? 1 : -1) : (x < y ? 1 : -1);
+      });
+    }
+    function updateSalesHeaderSortIndicators(){
+      const headerRow = document.getElementById('fosSalesHeaders');
+      [...headerRow.children].forEach(th=>{
+        th.classList.remove('sorted-asc','sorted-desc');
+        const k = th.dataset.sort;
+        if(!k) return;
+        if(salesSort.key === k){
+          th.classList.add(salesSort.asc ? 'sorted-asc' : 'sorted-desc');
+        }
+      });
+    }
+    function renderFOSSalesTable(){
+      if(state.role !== 'FOS' || !state.name){
+        fosSalesSection.style.display = 'none'; fosSalesBody.innerHTML = ''; return;
+      }
+      const rows = (salesFOS[state.name] || []);
+      const activeKey = salesSort.key;
+      const sorted = activeKey ? sortSales(rows, activeKey, salesSort.asc) : rows;
+
+      if(!sorted.length){
+        fosSalesBody.innerHTML = `<tr><td colspan="7" class="muted">No sales entries found.</td></tr>`;
+        fosSalesSection.style.display = 'block'; updateSalesHeaderSortIndicators(); return;
+      }
+
+      const trHTML = sorted.map(r=>{
+        const statusClass = r.status === 'Cancelled' ? 'cancelled' : (r.status === 'CONFIRMED' ? 'CONFIRMED' : 'not-CONFIRMED');
+        const flag = flagFromStatus(r.status);
+        return `<tr>
+          <td>${fmtDate(r.date)}</td>
+          <td>${r.project || '—'}</td>
+          <td>${r.client || '—'}</td>
+          <td>${r.unit || '—'}</td>
+          <td><span class="pill ${statusClass}">${r.status}</span></td>
+          <td class="num">${fmtINR(r.revenue)}</td>
+          <td class="num">${flag}</td>
+        </tr>`;
+      }).join('');
+
+      fosSalesBody.innerHTML = trHTML;
+      fosSalesSection.style.display = 'block';
+      updateSalesHeaderSortIndicators();
+    }
+
+    /* ===== 3) Input Matrix ===== */
+    function renderFOSMatrixTable(){
+      if(state.role !== 'FOS' || !state.name){
+        fosMatrixSection.style.display = 'none'; fosMatrixBody.innerHTML = ''; return;
+      }
+      const emp = employees['FOS'][state.name];
+      if(!emp){ fosMatrixSection.style.display='none'; return; }
+
+      const months = monthRange(emp.doj, emp.dol);
+      const matrix = (matrixFOS[state.name] || {});
+      let tCalls=0, tConn=0, tDur=0, tSvS=0, tSvD=0, tMtS=0, tMtD=0, tDW=0;
+
+      const monthRows = months.map(m=>{
+        const r = matrix[m.key] || { calls:0, connected:0, duration:0, svSched:0, svDone:0, mtgSched:0, mtgDone:0, dailyWork:0 };
+        tCalls += r.calls||0; tConn+= r.connected||0; tDur+= r.duration||0;
+        tSvS += r.svSched||0; tSvD+= r.svDone||0; tMtS+= r.mtgSched||0; tMtD+= r.mtgDone||0; tDW+= r.dailyWork||0;
+
+        return `<tr>
+          <td>${m.label}</td>
+          <td class="num">${r.calls||0}</td>
+          <td class="num">${r.connected||0}</td>
+          <td class="num">${r.duration||0}</td>
+          <td class="num">${r.svSched||0}</td>
+          <td class="num">${r.svDone||0}</td>
+          <td class="num">${r.mtgSched||0}</td>
+          <td class="num">${r.mtgDone||0}</td>
+          <td class="num">${r.dailyWork||0}</td>
+        </tr>`;
+      }).join('');
+
+      const totalsRow = `
+        <tr class="totals-row">
+          <td>Total</td>
+          <td class="num">${tCalls}</td>
+          <td class="num">${tConn}</td>
+          <td class="num">${tDur}</td>
+          <td class="num">${tSvS}</td>
+          <td class="num">${tSvD}</td>
+          <td class="num">${tMtS}</td>
+          <td class="num">${tMtD}</td>
+          <td class="num">${tDW}</td>
+        </tr>`;
+
+      fosMatrixBody.innerHTML = totalsRow + monthRows;
+      fosMatrixSection.style.display = 'block';
+    }
+
+    /* ===== Export (CSV) ===== */
+    function downloadCSV(filename, rows){
+      const csv = rows.map(r=>r.map(v=>{
+        const s = String(v ?? '');
+        if(/[",\n]/.test(s)) return `"${s.replace(/"/g,'""')}"`;
+        return s;
+      }).join(',')).join('\n');
+      const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = filename; a.click();
+      URL.revokeObjectURL(url);
+    }
+    function tableToRows(table){
+      const rows = [];
+      const ths = table.querySelectorAll('thead th');
+      rows.push(Array.from(ths).map(th=>th.textContent.trim()));
+      const trs = table.querySelectorAll('tbody tr');
+      trs.forEach(tr=>{
+        const tds = Array.from(tr.querySelectorAll('td')).map(td=>td.innerText.trim());
+        rows.push(tds);
+      });
+      return rows;
+    }
+    function doExport(){
+      if(state.role !== 'FOS' || !state.name){
+        alert('Please select FOS and a name first.');
+        return;
+      }
+      const name = state.name;
+      downloadCSV(`${name}_Monthly_Performance.csv`, tableToRows(document.getElementById('tblPerformance')));
+      downloadCSV(`${name}_Sales_Details.csv`,      tableToRows(document.getElementById('tblSales')));
+      downloadCSV(`${name}_Input_Matrix.csv`,       tableToRows(document.getElementById('tblMatrix')));
+    }
+
+    /* ===== Init & Events ===== */
+    function resetAll(){ searchInput.value=''; state.name=null; closeAC(); updateDetails(); renderFOSTable(); renderFOSSalesTable(); renderFOSMatrixTable(); searchInput.focus(); }
+
+    (function init(){
+      const first = namesForRole(state.role)[0] || null;
+      if(first){ state.name = first; searchInput.value = first; }
+      updateDetails(); renderFOSTable(); renderFOSSalesTable(); renderFOSMatrixTable();
+      document.getElementById('btnExport')?.addEventListener('click', doExport);
+      document.getElementById('btnPrint')?.addEventListener('click', ()=> window.print());
+      // No JS for btnSource needed since it's a plain <a href="main-source.html">
+    })();
+
+    roleSel.addEventListener('change', e=>{
+      state.role=e.target.value; state.name=null; searchInput.value='';
+      closeAC(); updateDetails(); renderFOSTable(); renderFOSSalesTable(); renderFOSMatrixTable();
+    });
+    function refreshAC(){ openAC(filterNames(searchInput.value.trim())); }
+    searchInput.addEventListener('focus', ()=>{ refreshAC(); });
+    searchInput.addEventListener('input', ()=>{ refreshAC(); });
+    document.getElementById('resetFilters').addEventListener('click', resetAll);
+    function closeAC(){ acList.classList.remove('open'); searchInput.setAttribute('aria-expanded','false'); acIndex=-1; }
+    function openAC(items){
+      acList.innerHTML = items.length
+        ? items.map((n,i)=>`<div class="ac-item${i===0?' active':''}" role="option">${n}</div>`).join('')
+        : `<div class="ac-empty">No names found</div>`;
+      acList.classList.add('open'); searchInput.setAttribute('aria-expanded','true'); acIndex = items.length?0:-1;
+      [...acList.querySelectorAll('.ac-item')].forEach(el=>{
+        el.addEventListener('mousedown', (e)=>{ e.preventDefault(); selectName(el.textContent.trim()); });
+      });
+    }
+    searchInput.addEventListener('keydown', (e)=>{
+      if(!acList.classList.contains('open')){
+        if(e.key.length===1 || e.key==='Backspace' || e.key==='Delete' || e.key==='ArrowDown'){ refreshAC(); }
+      }
+      if(e.key==='ArrowDown'){ e.preventDefault(); moveActive(+1); }
+      else if(e.key==='ArrowUp'){ e.preventDefault(); moveActive(-1); }
+      else if(e.key==='Enter'){ e.preventDefault(); const el = acList.querySelectorAll('.ac-item')[acIndex]; if(el) selectName(el.textContent.trim()); }
+      else if(e.key==='Escape'){ closeAC(); }
+    });
+    document.addEventListener('click', (e)=>{ if(!e.target.closest('.ac-wrap')) closeAC(); });
+    function moveActive(delta){
+      const items = [...acList.querySelectorAll('.ac-item')]; if(!items.length) return;
+      acIndex = (acIndex + delta + items.length) % items.length;
+      items.forEach(el=>el.classList.remove('active')); items[acIndex].classList.add('active'); items[acIndex].scrollIntoView({block:'nearest'});
+    }
+
+    document.getElementById('fosSalesHeaders').addEventListener('click', (e)=>{
+      const th = e.target.closest('th');
+      if(!th || !th.dataset.sort) return;
+      const key = th.dataset.sort;
+      if(salesSort.key === key){ salesSort.asc = !salesSort.asc; }
+      else { salesSort.key = key; salesSort.asc = true; }
+      renderFOSSalesTable();
+    });
+  </script>
+</body>
+</html>
