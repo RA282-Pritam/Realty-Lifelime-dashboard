@@ -1143,7 +1143,7 @@
 
 
     /* ===== 2) Sales (sortable) ===== */
-    function flagFromStatus(status){ return status === 'Cancelled' ? 0 : 1; }
+    function flagFromStatus(status){ return status === 'CANCELLED' ? 0 : 1; }
     function getSortableVal(row, key){
       switch(key){
         case 'date':    return new Date(row.date).getTime();
