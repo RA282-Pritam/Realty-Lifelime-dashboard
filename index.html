@@ -34,16 +34,8 @@
       box-shadow: 0 20px 40px rgba(0,0,0,0.35);
     }
 
-    /* LOGO */
     .logo-wrap { display:flex; justify-content:center; margin-bottom:16px; }
-    .logo {
-      width: 140px;               /* size control */
-      max-width: 60%;
-      height: auto;
-      object-fit: contain;
-      /* dark bg par light logo ho to filter hata dein */
-      /* filter: drop-shadow(0 4px 8px rgba(0,0,0,.4)); */
-    }
+    .logo { width: 140px; max-width: 60%; height: auto; object-fit: contain; }
 
     h1 { margin: 8px 0; font-size: clamp(28px, 4vw, 44px); }
     p  { margin: 0 0 24px; opacity: 0.9; font-size: 1.1rem; }
@@ -58,34 +50,75 @@
       font-weight: 600;
       transition: transform .15s ease, box-shadow .15s ease;
       box-shadow: 0 6px 16px rgba(0,0,0,.25);
+      cursor: pointer;
     }
     .btn:hover { transform: translateY(-1px); }
     .btn:active { transform: translateY(0); }
+
+    /* HIDE login form initially */
+    #loginForm { display: none; margin-top: 20px; text-align: left; }
+    #loginForm input {
+      width: 100%; padding: 10px; margin: 8px 0;
+      border-radius: 6px; border: none;
+    }
   </style>
 </head>
 <body>
   <main class="card">
-    <!-- LOGO HERE -->
     <div class="logo-wrap">
       <img src="logo.png" alt="Realty Assistant logo" class="logo" />
     </div>
 
     <h1 id="greeting">Welcome!</h1>
     <p>We are now ready to present the agent performance.</p>
-    <a class="btn" href="dashboard.html">CLICK TO CONTINUE</a>
+
+    <!-- Continue button -->
+    <button class="btn" onclick="showLogin()">CLICK TO CONTINUE</button>
+
+    <!-- Login form -->
+    <form id="loginForm" onsubmit="return checkLogin(event)">
+      <label for="username">Login ID</label>
+      <input type="text" id="username" required>
+
+      <label for="password">Password</label>
+      <input type="password" id="password" required>
+
+      <button type="submit" class="btn">Login</button>
+      <p id="errorMsg" style="color: #ff8080; display:none;">Invalid ID or Password</p>
+    </form>
   </main>
 
   <script>
     function setGreeting() {
       const hour = new Date().getHours();
       const el = document.getElementById("greeting");
-      let text = "";
-      if (hour >= 5 && hour < 12) text = "Good Morning, Realty Assistant Team!";
-      else if (hour >= 12 && hour < 17) text = "Good Afternoon, Realty Assistant Team!";
-      else text = "Good Evening, Realty Assistant Team!";
-      el.textContent = text;
+      if (hour >= 5 && hour < 12) el.textContent = "Good Morning, Realty Assistant Team!";
+      else if (hour >= 12 && hour < 17) el.textContent = "Good Afternoon, Realty Assistant Team!";
+      else el.textContent = "Good Evening, Realty Assistant Team!";
     }
     setGreeting();
+
+    function showLogin(){
+      document.querySelector(".btn").style.display = "none"; // hide continue button
+      document.getElementById("loginForm").style.display = "block"; // show login form
+    }
+
+    function checkLogin(event){
+      event.preventDefault();
+
+      // 👇 apne credentials yahan set karo
+      const VALID_USER = "Admin";
+      const VALID_PASS = "12345";
+
+      const u = document.getElementById("username").value.trim();
+      const p = document.getElementById("password").value.trim();
+
+      if(u === VALID_USER && p === VALID_PASS){
+        window.location.href = "dashboard.html"; // success → dashboard
+      } else {
+        document.getElementById("errorMsg").style.display = "block";
+      }
+    }
   </script>
 </body>
 </html>
